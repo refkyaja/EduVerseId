@@ -153,7 +153,7 @@ export default function AppRoutes({
         path="/quiz/play"
         element={
           <ProtectedRoute>
-            <MobileLayout hideNav={true}>
+            <MobileLayout hideNav={true} hideTopBar={true}>
               <QuizPlayPage />
             </MobileLayout>
           </ProtectedRoute>

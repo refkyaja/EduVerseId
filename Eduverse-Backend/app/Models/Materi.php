@@ -37,7 +37,7 @@ class Materi extends Model
 
     public function versi()
     {
-        return $this->hasMany(MateriVersi::class, 'materi_id');
+        return $this->hasMany(MateriVersi::class, 'materi_id')->orderBy('nomor_versi', 'asc');
     }
 
     public function versiAktif()

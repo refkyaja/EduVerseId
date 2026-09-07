@@ -23,6 +23,41 @@ export default function LeaderboardPage() {
       setLoading(true);
       if (isApiClass && classId) {
         try {
+          const lbData = await apiService.getLeaderboard(classId);
+          if (isMounted && Array.isArray(lbData) && lbData.length > 0) {
+            const formatted = lbData.map(m => {
+              const memName = m.name || m.user?.name || 'Anggota Kelas';
+              const memAvatar = (m.profile_photo || m.avatar || m.user?.avatar) && !String(m.profile_photo || m.avatar || m.user?.avatar).includes('unsplash')
+                ? (m.profile_photo || m.avatar || m.user?.avatar)
+                : `https://ui-avatars.com/api/?name=${encodeURIComponent(memName)}&background=8b5cf6&color=ffffff&bold=true&size=256`;
+
+              const isYou = String(m.user_id || m.id) === String(currentUser?.id);
+              const totalXp = Number(m.total_xp ?? m.xp ?? (isYou ? currentClassXp : 0));
+              const finalXp = isYou ? Math.max(totalXp, currentClassXp) : totalXp;
+
+              return {
+                id: m.user_id || m.id,
+                name: memName,
+                avatar: memAvatar,
+                xp: Number(finalXp) || 0,
+                school: activeClass?.name || 'Ruang Kelas',
+                badge: (m.role === 'owner' || m.role === 'Owner') ? '👑 Owner' : (m.role === 'admin' || m.role === 'Admin') ? '🛡️ Admin' : '⭐ Siswa',
+                you: isYou
+              };
+            });
+
+            // Sort by XP descending
+            formatted.sort((a, b) => b.xp - a.xp);
+            formatted.forEach((p, i) => p.rank = i + 1);
+            setLeaderboardList(formatted);
+            setLoading(false);
+            return;
+          }
+        } catch (e) {
+          console.warn("Failed to load leaderboard endpoint, falling back to members list:", e);
+        }
+
+        try {
           const members = await apiService.getMembers(classId);
           if (isMounted && Array.isArray(members) && members.length > 0) {
             const formatted = members.map(m => {

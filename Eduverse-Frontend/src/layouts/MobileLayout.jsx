@@ -4,15 +4,15 @@ import BottomNav from '../components/BottomNav';
 import Toast from '../components/Toast';
 import { useAppState } from '../context/AppStateContext';
 
-export default function MobileLayout({ children, hideNav = false, hideBottomNav = false }) {
+export default function MobileLayout({ children, hideNav = false, hideBottomNav = false, hideTopBar = false }) {
   const { toastMessage } = useAppState();
 
   const shouldHideBottom = hideNav || hideBottomNav;
 
   return (
     <div className={`min-h-screen w-full bg-background relative flex flex-col overflow-x-hidden ${shouldHideBottom ? '' : 'pb-24'}`}>
-      {/* TopBar Header is always visible */}
-      <TopBar />
+      {/* TopBar Header */}
+      {!hideTopBar && <TopBar />}
 
       <main className="flex-1 flex flex-col">
         {children}

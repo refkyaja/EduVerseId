@@ -5,12 +5,12 @@ import { useAppState } from '../context/AppStateContext';
 import { apiService } from '../services/apiService';
 import ConfirmModal from '../components/ConfirmModal';
 
-export default function ClassAnggotaPage({ members = [], currentRole = 'member', isManagementMode = false, onToggleAdmin, onKickMember }) {
+export default function ClassAnggotaPage({ members = [], currentRole = 'member', isManagementMode = false, onToggleAdmin, onKickMember, isLoading = false }) {
   const { classId } = useParams();
   const { currentUser, showToast } = useAppState();
   const [memberToKick, setMemberToKick] = useState(null);
   const [internalMembers, setInternalMembers] = useState(members);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(isLoading);
   const [searchQuery, setSearchQuery] = useState('');
 
   const isOwner = currentRole === 'owner';
@@ -18,12 +18,18 @@ export default function ClassAnggotaPage({ members = [], currentRole = 'member',
   const canManageMembers = isOwner || isAdmin;
 
   useEffect(() => {
+    setLoading(isLoading);
+  }, [isLoading]);
+
+  useEffect(() => {
     if (members && members.length > 0) {
       setInternalMembers(members);
+      setLoading(false);
       return;
     }
 
     if (classId && (!members || members.length === 0)) {
+      setLoading(true);
       apiService.getMembers(classId)
         .then(res => {
           if (Array.isArray(res) && res.length > 0) {
@@ -46,7 +52,10 @@ export default function ClassAnggotaPage({ members = [], currentRole = 'member',
             }] : []);
           }
         })
-        .catch(() => {});
+        .catch(() => {})
+        .finally(() => {
+          setLoading(false);
+        });
     }
   }, [classId, members, currentUser, currentRole]);
 
@@ -141,7 +150,12 @@ export default function ClassAnggotaPage({ members = [], currentRole = 'member',
       </div>
 
       <div className="space-y-2.5">
-        {filteredList.length > 0 ? (
+        {loading || isLoading ? (
+          <div className="flex flex-col items-center justify-center py-12 gap-2 bg-card border border-border rounded-3xl">
+            <Loader2 className="w-6 h-6 text-primary animate-spin" />
+            <span className="text-xs text-muted-foreground font-bold">Memuat anggota kelas...</span>
+          </div>
+        ) : filteredList.length > 0 ? (
           filteredList.map(mem => {
             const isMemOwner = mem.role === 'Owner' || mem.role === 'owner';
             const isMemAdmin = mem.role === 'Admin' || mem.role === 'admin';

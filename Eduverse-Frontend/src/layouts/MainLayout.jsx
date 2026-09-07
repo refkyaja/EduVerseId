@@ -81,7 +81,7 @@ export default function MainLayout({ children, user, onRoleChange }) {
             <div className="bg-card border border-primary/20 rounded-full px-3 py-1.5 flex items-center gap-2 shadow-sm">
               <div className="w-3 h-3 bg-xp-gold rounded-full shadow-[0_0_8px_rgba(251,191,36,0.8)]"></div>
               <span className="font-bold text-xs tabular-nums text-foreground">
-                {(appState?.xp || user?.totalXp || 3950).toLocaleString()} XP
+                {(currentUser?.xp ?? appState?.xp ?? user?.totalXp ?? 0).toLocaleString()} XP
               </span>
             </div>
 

@@ -17,11 +17,13 @@ class PercobaanKuis extends Model
         'percobaan_ke',
         'skor',
         'xp_didapat',
+        'power_up_terpakai',
         'mulai_pada',
         'selesai_pada',
     ];
 
     protected $casts = [
+        'power_up_terpakai' => 'array',
         'mulai_pada' => 'datetime',
         'selesai_pada' => 'datetime',
     ];

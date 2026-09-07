@@ -23,6 +23,8 @@ return new class extends Migration
             $table->timestamp('ditinjau_pada')->nullable();
             $table->text('catatan_review')->nullable();
             $table->timestamps();
+
+            $table->unique(['materi_id', 'nomor_versi']);
         });
     }
 

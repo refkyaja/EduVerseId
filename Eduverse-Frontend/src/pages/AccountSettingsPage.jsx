@@ -290,33 +290,13 @@ export default function AccountSettingsPage() {
                 </div>
 
                 {/* User Credentials & Header */}
-                <div className="space-y-2 text-center sm:text-left min-w-0 flex-1 z-10">
+                <div className="space-y-1 text-center sm:text-left min-w-0 flex-1 z-10">
                   <h2 className="text-2xl md:text-3xl font-extrabold italic tracking-tight truncate drop-shadow-md">
                     {activeUser.name}
                   </h2>
                   <p className="text-xs text-primary-foreground/90 font-semibold truncate">
                     @{activeUser.username} · {activeUser.email}
                   </p>
-
-                  {/* Action Buttons inside Banner */}
-                  <div className="pt-2 flex items-center justify-center sm:justify-start gap-2 flex-wrap">
-                    <button
-                      type="button"
-                      onClick={() => fileInputRef.current?.click()}
-                      className="bg-white/20 hover:bg-white/30 text-white text-xs font-extrabold px-4 py-2 rounded-full backdrop-blur-md border border-white/30 transition-all flex items-center gap-1.5 cursor-pointer shadow-sm"
-                    >
-                      <Camera className="w-3.5 h-3.5" /> Upload Foto Baru
-                    </button>
-                    {isCustomAvatar && (
-                      <button
-                        type="button"
-                        onClick={handleDeletePhoto}
-                        className="bg-danger/80 hover:bg-danger text-white text-xs font-extrabold px-4 py-2 rounded-full backdrop-blur-md border border-white/30 transition-all flex items-center gap-1.5 cursor-pointer shadow-sm"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" /> Hapus Foto Profil
-                      </button>
-                    )}
-                  </div>
                 </div>
               </div>
 

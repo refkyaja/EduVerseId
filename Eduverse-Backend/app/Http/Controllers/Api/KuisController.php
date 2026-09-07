@@ -24,7 +24,7 @@ class KuisController extends Controller
 
         $kuis = Kuis::where('kelas_id', $classId)
             ->withCount('soal')
-            ->with('creator')
+            ->with(['creator', 'soal.opsi'])
             ->get();
 
         return response()->json([
@@ -41,8 +41,8 @@ class KuisController extends Controller
             return response()->json(['status' => 'error', 'message' => 'Kelas tidak ditemukan.'], 404);
         }
 
-        $member = $class->classMembers()->where('user_id', $user->id)->first();
-        if (!$member || !in_array($member->role, ['owner', 'admin'])) {
+        $role = $class->getRoleForUser($user);
+        if (!$role || !in_array($role, ['owner', 'admin'])) {
             return response()->json(['message' => 'Hanya Owner atau Admin yang dapat membuat Kuis.'], 403);
         }
 
@@ -50,21 +50,27 @@ class KuisController extends Controller
             'judul' => 'required|string|max:255',
             'deskripsi' => 'nullable|string',
             'batas_waktu' => 'nullable|integer|min:1',
+            'acak_soal' => 'nullable|boolean',
+            'acak_opsi' => 'nullable|boolean',
             'soal_ids' => 'nullable|array',
             'soal_ids.*' => 'exists:soal,id',
         ]);
+
+        $soalIds = $validated['soal_ids'] ?? [];
 
         $kuis = Kuis::create([
             'kelas_id' => $classId,
             'judul' => $validated['judul'],
             'deskripsi' => $validated['deskripsi'] ?? null,
             'batas_waktu' => $validated['batas_waktu'] ?? 30,
-            'jumlah_soal' => count($validated['soal_ids'] ?? []),
+            'jumlah_soal' => count($soalIds),
+            'acak_soal' => $request->boolean('acak_soal'),
+            'acak_opsi' => $request->boolean('acak_opsi'),
             'dibuat_oleh' => $user->id,
         ]);
 
-        if (!empty($validated['soal_ids'])) {
-            foreach ($validated['soal_ids'] as $idx => $soalId) {
+        if (!empty($soalIds)) {
+            foreach ($soalIds as $idx => $soalId) {
                 $kuis->soal()->attach($soalId, ['urutan' => $idx + 1]);
             }
         }
@@ -72,14 +78,14 @@ class KuisController extends Controller
         LogAktivitas::create([
             'kelas_id' => $classId,
             'user_id' => $user->id,
-            'peran_user' => strtoupper($member->role),
+            'peran_user' => strtoupper($role),
             'deskripsi_aksi' => "Menerbitkan Kuis Baru \"{$kuis->judul}\"",
         ]);
 
         return response()->json([
             'status' => 'success',
             'message' => "Kuis \"{$kuis->judul}\" berhasil diterbitkan!",
-            'data' => $kuis->load('soal')
+            'data' => $kuis->load('soal.opsi')
         ], 201);
     }
 
@@ -114,6 +120,7 @@ class KuisController extends Controller
 
         $validated = $request->validate([
             'jawaban' => 'required|array', // [{soal_id: 1, opsi_dipilih_id: 2}]
+            'power_up_terpakai' => 'nullable|array',
         ]);
 
         // Count previous attempts for XP scaling
@@ -127,6 +134,7 @@ class KuisController extends Controller
             'kuis_id' => $id,
             'user_id' => $user->id,
             'percobaan_ke' => $nextAttemptNum,
+            'power_up_terpakai' => $validated['power_up_terpakai'] ?? null,
             'mulai_pada' => now()->subMinutes(5),
             'selesai_pada' => now(),
         ]);
@@ -171,6 +179,87 @@ class KuisController extends Controller
                 'benar' => $correctCount,
                 'total_soal' => $totalQuestions,
             ]
+        ]);
+    }
+
+    public function update(Request $request, $classId, $kuisId)
+    {
+        $user = $request->user();
+        $class = ClassModel::findOrFail($classId);
+
+        $role = $class->getRoleForUser($user);
+        if (!$role || !in_array($role, ['owner', 'admin'])) {
+            return response()->json(['message' => 'Hanya Owner atau Admin yang dapat memperbarui Kuis.'], 403);
+        }
+
+        $kuis = Kuis::where('kelas_id', $classId)->where('id', $kuisId)->firstOrFail();
+
+        $validated = $request->validate([
+            'judul' => 'required|string|max:255',
+            'deskripsi' => 'nullable|string',
+            'batas_waktu' => 'nullable|integer|min:1',
+            'acak_soal' => 'nullable|boolean',
+            'acak_opsi' => 'nullable|boolean',
+            'soal_ids' => 'nullable|array',
+        ]);
+
+        $kuis->update([
+            'judul' => $validated['judul'],
+            'deskripsi' => $validated['deskripsi'] ?? $kuis->deskripsi,
+            'batas_waktu' => $validated['batas_waktu'] ?? $kuis->batas_waktu,
+            'acak_soal' => $request->has('acak_soal') ? $request->boolean('acak_soal') : $kuis->acak_soal,
+            'acak_opsi' => $request->has('acak_opsi') ? $request->boolean('acak_opsi') : $kuis->acak_opsi,
+        ]);
+
+        if (isset($validated['soal_ids'])) {
+            $syncData = [];
+            foreach ($validated['soal_ids'] as $idx => $soalId) {
+                $syncData[$soalId] = ['urutan' => $idx + 1];
+            }
+            $kuis->soal()->sync($syncData);
+            $kuis->update(['jumlah_soal' => count($validated['soal_ids'])]);
+        }
+
+        LogAktivitas::create([
+            'kelas_id' => $classId,
+            'user_id' => $user->id,
+            'peran_user' => strtoupper($role),
+            'deskripsi_aksi' => "Memperbarui Kuis \"{$kuis->judul}\"",
+        ]);
+
+        return response()->json([
+            'status' => 'success',
+            'message' => "Kuis \"{$kuis->judul}\" berhasil diperbarui!",
+            'data' => $kuis
+        ]);
+    }
+
+    public function destroy(Request $request, $classId, $kuisId)
+    {
+        $user = $request->user();
+        $class = ClassModel::findOrFail($classId);
+
+        $role = $class->getRoleForUser($user);
+        if (!$role || !in_array($role, ['owner', 'admin'])) {
+            return response()->json(['message' => 'Hanya Owner atau Admin yang dapat menghapus Kuis.'], 403);
+        }
+
+        $kuis = Kuis::where('kelas_id', $classId)->where('id', $kuisId)->first();
+        if ($kuis) {
+            $judul = $kuis->judul;
+            $kuis->delete();
+
+            LogAktivitas::create([
+                'kelas_id' => $classId,
+                'user_id' => $user->id,
+                'peran_user' => strtoupper($role),
+                'deskripsi_aksi' => "Menghapus Kuis \"{$judul}\"",
+            ]);
+        }
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Kuis berhasil dihapus!'
         ]);
     }
 }

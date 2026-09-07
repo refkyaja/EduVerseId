@@ -27,18 +27,27 @@ export default function MaterialDetailPage({ materials, currentRole, onUpdateMat
   }
 
   const isOwner = currentRole === 'owner';
-  const versions = material.versions || [
+  const rawVersions = material.versi || material.versions || [];
+  const versions = rawVersions.length > 0 ? rawVersions.map(v => ({
+    version: Number(v.nomor_versi || v.version || 1),
+    updatedAt: v.created_at ? new Date(v.created_at).toLocaleDateString('id-ID') : (v.updatedAt || 'Hari ini'),
+    updatedBy: v.creator?.name || v.updatedBy || material.createdBy || 'Kontributor',
+    status: v.status || material.status,
+    content: v.isi || v.content || material.content || '',
+    reviewer: v.reviewer || null,
+    creator: v.creator || null
+  })) : [
     {
-      version: material.activeVersion || 1,
+      version: Number(material.activeVersion || material.version || 1),
       updatedAt: 'Baru saja',
       updatedBy: material.createdBy,
       status: material.status,
-      content: material.content,
+      content: material.content || material.isi || '',
     }
   ];
 
-  const activeVer = selectedVersion || material.activeVersion || versions[0]?.version || 1;
-  const currentVerObj = versions.find(v => v.version === activeVer) || versions[0];
+  const activeVer = Number(selectedVersion || material.activeVersion || versions[0]?.version || 1);
+  const currentVerObj = versions.find(v => Number(v.version) === activeVer) || versions[0];
 
   const handleStartEdit = () => {
     setEditContent(currentVerObj.content || '');

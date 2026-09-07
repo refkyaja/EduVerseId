@@ -208,18 +208,50 @@ GET  /api/kelas/{kelas}/leaderboard                      → leaderboard kelas b
 - **Materi dikelompokkan per Mata Pelajaran** — ada route khusus `add-subject` buat nambah mata pelajaran, jadi ini fitur asli, bukan sisa dummy dari Eduverse-Reference. Perlu dicek apakah tabel `mata_pelajaran`/`subjects` udah ada di backend; kalau belum, ini yang perlu dibikin duluan sebelum form add-subject bisa jalan beneran.
 
 ### QuizPickerPage.jsx & QuizPlayPage.jsx
-- Daftar kuis (status aktif), halaman kerjain kuis (timer opsional, acak soal/opsi kalau diaktifkan)
+- Daftar kuis (status aktif), halaman kerjain kuis
 - Kuis bisa diulang; tiap percobaan disimpan biar riwayat pengerjaan tetap ada
+- **Alur jawab soal: instant feedback per soal, bukan submit-di-akhir.** Begitu user pilih 1
+  opsi, jawaban langsung dikunci (gak bisa diganti kecuali lewat power-up Second Chance),
+  langsung ditampilin bener/salah (highlight hijau/merah), tunggu delay singkat (~1.5-2 detik),
+  lalu OTOMATIS lanjut ke soal berikutnya tanpa tombol manual.
+- Setting per kuis (kolom `acak_soal`/`acak_opsi` di tabel `kuis`): kalau aktif, urutan soal/opsi
+  di-shuffle sekali di awal percobaan, konsisten dipakai selama 1 sesi (gak diacak ulang tiap render).
 - Form tambah kuis ada di ProfilePage tab `add_quiz`, dengan 2 mode input:
-  - **Manual**: form satu-satu (pertanyaan, jenis soal, opsi jawaban, jawaban benar, pembahasan)
+  - **Manual**: form satu-satu (pertanyaan, jenis soal, opsi jawaban A-E, jawaban benar,
+    pembahasan). Opsi minimal A-B, maksimal A-E, tombol tambah/hapus cuma bisa nambah/hapus
+    opsi paling terakhir, pilihan jawaban benar cuma nampilin opsi yang beneran ada di soal itu.
   - **Tempel Teks**: textarea buat paste hasil generate AI (Claude/ChatGPT/dst), tombol "Parse"
     manggil endpoint parse-teks (nama endpoint pasti nyusul dicek dari backend) buat dapetin
     preview soal yang bisa diedit sebelum disimpan. Format teks: nomor+titik+pertanyaan, opsi
     A/B/C/D per baris, baris "Jawaban: [huruf]", opsional baris "Pembahasan: ...". Soal yang
-    gagal ke-parse ditandain di preview, bukan didiemin/dibuang.
+    gagal ke-parse ditandain di preview, bukan didiemin/dibuang. Logic batas opsi (min A-B,
+    max A-E, jawaban benar menyesuaikan jumlah opsi) berlaku juga di preview ini, sama kayak
+    mode Manual.
   - Form kuis TIDAK punya field jadwal/hari — kuis dibuat kapan aja, gak terikat jadwal
-    mata pelajaran (EduVerse gak fokus ke sekolah, lihat README bagian Tujuan). Field
-    "Jadwal Hari" yang sempet muncul di form add_quiz itu bug, harus dihapus.
+    mata pelajaran (EduVerse gak fokus ke sekolah, lihat README bagian Tujuan).
+
+### Sistem Power-Up (QuizPlayPage.jsx)
+
+Fitur asli dari `Eduverse-Reference/` yang belum sempet ke-dokumentasi — **3 power-up diundi
+acak dari 8 yang ada, tiap kali user mulai 1 percobaan kuis**. Daftar lengkap 8 power-up beserta
+kapan boleh dipakai di sistem instant-feedback yang baru:
+
+**Dipakai SEBELUM soal dijawab/dikunci** (tombol power-up disabled begitu soal itu udah dijawab):
+- **Hint** — nampilin petunjuk soal, diacak tiap ujian, limit 3 pemakaian per sesi percobaan.
+- **Fifty Fifty** — otomatis ilangin 2 opsi yang salah dari soal yang lagi dikerjain.
+- **Answer Scanner** — nampilin kemungkinan jawaban benar berdasar analisis soal (versi lebih kuat dari Hint).
+- **Skip Question** — lewatin soal itu tanpa dijawab dan tanpa pengurangan skor, langsung lanjut ke soal berikutnya (gak masuk hitungan benar/salah).
+- **Kotak Misteri** — buka kotak, dapet efek acak salah satu dari: Hint, Fifty Fifty, Skip Question, atau bonus XP langsung.
+
+**Dievaluasi PAS jawaban dikunci** (sebelum tampilan benar/salah dirender):
+- **Lucky Guess** — kalau jawaban salah, ada peluang acak (pakai persentase yang masuk akal, misal 25-30%, sesuaikan sendiri) jawaban tetap dianggap benar. Tampilin animasi/keterangan khusus "Lucky Guess!" kalau kena, beda dari tampilan benar biasa.
+- **Shield** — kalau jawaban salah, skor TIDAK dikurangi (dipakai otomatis 1 kali lalu abis). Tetep tampilin sebagai salah secara visual, tapi kasih indikator "Shield melindungi skor kamu".
+
+**Butuh redesign alur, KONFLIK dengan sistem lama** (dulu modelnya submit-semua-baru-dikoreksi, sekarang instant-lock):
+- **Second Chance** — "boleh mengulang 1 jawaban yang salah". Di sistem baru: kalau jawaban salah dan Second Chance masih ada, JANGAN langsung auto-advance — tampilin prompt "Kesempatan Kedua!", buka kunci soal itu buat SATU kali percobaan ulang aja, konsumsi charge Second Chance. Kalau percobaan ulang itu salah lagi, baru dikunci beneran sebagai salah (Shield masih bisa berlaku di titik ini kalau ada).
+
+Kalau nanti nemu lagi detail power-up yang beda dari deskripsi di atas pas ngecek kode asli
+(`Eduverse-Reference/`), sesuaikan dokumen ini, jangan diem-diem diubah tanpa update sini.
 
 ### LeaderboardPage.jsx
 - Peringkat anggota kelas berdasarkan XP, bukan skor mentah
@@ -282,7 +314,7 @@ GET  /api/kelas/{kelas}/leaderboard                      → leaderboard kelas b
 - `id`, `kuis_id`, `soal_id` (pivot, soal dari bank bisa dipakai lintas kuis), `urutan`
 
 ### Tabel percobaan_kuis
-- `id`, `kuis_id`, `user_id`, `percobaan_ke`, `skor`, `xp_didapat`, `mulai_pada`, `selesai_pada`, `timestamps`
+- `id`, `kuis_id`, `user_id`, `percobaan_ke`, `skor`, `xp_didapat`, `power_up_terpakai` (nullable JSON — nyimpen 3 power-up yang diundi buat percobaan ini + sisa pemakaian tiap power-up, misal `{"hint": 3, "shield": 1, "skip_question": null}`), `mulai_pada`, `selesai_pada`, `timestamps`
 
 ### Tabel jawaban_percobaan
 - `id`, `percobaan_id`, `soal_id`, `opsi_dipilih_id`, `benar`, `timestamps`

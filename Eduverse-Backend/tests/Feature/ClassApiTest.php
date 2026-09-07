@@ -625,4 +625,127 @@ class ClassApiTest extends TestCase
         $this->assertContains('Bapak Kepala Sekolah', $userNamesInLogs);
         $this->assertNotContains('Siswa Pintar', $userNamesInLogs);
     }
+
+    /**
+     * 20. Test Update Materi Hanya Ganti Judul/Mapel Tidak Membuat Versi Baru, tetapi Ganti Isi Membuat Versi Baru.
+     */
+    public function test_update_materi_conditional_versioning(): void
+    {
+        $owner = User::factory()->create(['name' => 'Owner Versi']);
+        $class = ClassModel::create([
+            'name' => 'Kelas Versi Test',
+            'category' => 'Pemrograman',
+            'code' => 'VERSI123',
+            'owner_id' => $owner->id,
+        ]);
+        $class->members()->attach($owner->id, ['role' => 'owner']);
+
+        // 1. Create Materi (v1)
+        $materiRes = $this->actingAs($owner, 'sanctum')->postJson("/api/classes/{$class->id}/materi", [
+            'judul' => 'Teks Negosiasi',
+            'isi' => 'Isi teks negosiasi v1...',
+        ]);
+        $materiRes->assertStatus(201);
+        $materiId = $materiRes->json('data.id');
+
+        // 2. Update ONLY Judul (Isi remains 'Isi teks negosiasi v1...') -> Should NOT create v2
+        $updateJudulRes = $this->actingAs($owner, 'sanctum')->putJson("/api/classes/{$class->id}/materi/{$materiId}", [
+            'judul' => 'TEKS NEGOSIASI BARU',
+            'isi' => 'Isi teks negosiasi v1...',
+        ]);
+        $updateJudulRes->assertStatus(200);
+
+        $materiDetail = $this->actingAs($owner, 'sanctum')->getJson("/api/classes/{$class->id}/materi/{$materiId}");
+        $this->assertCount(1, $materiDetail->json('data.versi'));
+        $this->assertEquals('TEKS NEGOSIASI BARU', $materiDetail->json('data.judul'));
+
+        // 3. Update Isi -> Should create v2
+        $updateIsiRes = $this->actingAs($owner, 'sanctum')->putJson("/api/classes/{$class->id}/materi/{$materiId}", [
+            'judul' => 'TEKS NEGOSIASI BARU',
+            'isi' => 'Isi rangkuman baru teks negosiasi v2...',
+        ]);
+        $updateIsiRes->assertStatus(200);
+
+        $materiDetailV2 = $this->actingAs($owner, 'sanctum')->getJson("/api/classes/{$class->id}/materi/{$materiId}");
+        $this->assertCount(2, $materiDetailV2->json('data.versi'));
+        $this->assertEquals(2, $materiDetailV2->json('data.versi_aktif.nomor_versi'));
+    }
+
+    /**
+     * 21. Test Hapus Versi Materi (Aturan Versi Aktif, Min 1 Versi, No Renumbering, & Hak Akses Owner).
+     */
+    public function test_delete_materi_version_rules(): void
+    {
+        $owner = User::factory()->create(['name' => 'Owner Hapus Versi']);
+        $student = User::factory()->create(['name' => 'Siswa Belajar']);
+        $class = ClassModel::create([
+            'name' => 'Kelas Test Hapus Versi',
+            'category' => 'Bahasa',
+            'code' => 'DELVER123',
+            'owner_id' => $owner->id,
+        ]);
+        $class->members()->attach($owner->id, ['role' => 'owner']);
+        $class->members()->attach($student->id, ['role' => 'member']);
+
+        // 1. Create Materi (v1)
+        $materiRes = $this->actingAs($owner, 'sanctum')->postJson("/api/classes/{$class->id}/materi", [
+            'judul' => 'Bab 1 Negosiasi',
+            'isi' => 'Konten Versi 1',
+        ]);
+        $materiId = $materiRes->json('data.id');
+
+        // Update to v2
+        $this->actingAs($owner, 'sanctum')->putJson("/api/classes/{$class->id}/materi/{$materiId}", [
+            'judul' => 'Bab 1 Negosiasi',
+            'isi' => 'Konten Versi 2',
+        ]);
+
+        // Update to v3
+        $this->actingAs($owner, 'sanctum')->putJson("/api/classes/{$class->id}/materi/{$materiId}", [
+            'judul' => 'Bab 1 Negosiasi',
+            'isi' => 'Konten Versi 3',
+        ]);
+
+        $detailBefore = $this->actingAs($owner, 'sanctum')->getJson("/api/classes/{$class->id}/materi/{$materiId}");
+        $versis = $detailBefore->json('data.versi');
+        $this->assertCount(3, $versis);
+
+        $v1 = collect($versis)->firstWhere('nomor_versi', 1);
+        $v2 = collect($versis)->firstWhere('nomor_versi', 2);
+        $v3 = collect($versis)->firstWhere('nomor_versi', 3);
+
+        // Active version is v3
+        $activeVersiId = $detailBefore->json('data.versi_aktif_id');
+
+        // Test 1: Try deleting active version (v3) -> MUST fail 422
+        $delActiveRes = $this->actingAs($owner, 'sanctum')->deleteJson("/api/classes/{$class->id}/materi-versi/{$activeVersiId}");
+        $delActiveRes->assertStatus(422);
+        $this->assertStringContainsString('Versi aktif tidak bisa dihapus', $delActiveRes->json('message'));
+
+        // Test 2: Non-owner try deleting v2 -> MUST fail 403
+        $delNonOwnerRes = $this->actingAs($student, 'sanctum')->deleteJson("/api/classes/{$class->id}/materi-versi/{$v2['id']}");
+        $delNonOwnerRes->assertStatus(403);
+
+        // Test 3: Owner deletes v2 -> MUST succeed 200
+        $delV2Res = $this->actingAs($owner, 'sanctum')->deleteJson("/api/classes/{$class->id}/materi-versi/{$v2['id']}");
+        $delV2Res->assertStatus(200);
+
+        // Verify remaining versions are v1 and v3 (NO renumbering of v3 to v2!)
+        $detailAfterV2Del = $this->actingAs($owner, 'sanctum')->getJson("/api/classes/{$class->id}/materi/{$materiId}");
+        $remainingVersis = $detailAfterV2Del->json('data.versi');
+        $this->assertCount(2, $remainingVersis);
+
+        $remainingNumbers = collect($remainingVersis)->pluck('nomor_versi')->all();
+        $this->assertEquals([1, 3], $remainingNumbers);
+
+        // Test 4: Delete v1 -> MUST succeed 200
+        $delV1Res = $this->actingAs($owner, 'sanctum')->deleteJson("/api/classes/{$class->id}/materi-versi/{$v1['id']}");
+        $delV1Res->assertStatus(200);
+
+        // Now only v3 remains
+        // Test 5: Try deleting v3 (last remaining version) -> MUST fail 422
+        $delLastRes = $this->actingAs($owner, 'sanctum')->deleteJson("/api/classes/{$class->id}/materi-versi/{$v3['id']}");
+        $delLastRes->assertStatus(422);
+        $this->assertStringContainsString('minimal 1 versi', $delLastRes->json('message'));
+    }
 }

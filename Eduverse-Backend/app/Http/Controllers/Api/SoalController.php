@@ -35,8 +35,8 @@ class SoalController extends Controller
             return response()->json(['status' => 'error', 'message' => 'Kelas tidak ditemukan.'], 404);
         }
 
-        $member = $class->classMembers()->where('user_id', $user->id)->first();
-        if (!$member || !in_array($member->role, ['owner', 'admin'])) {
+        $role = $class->getRoleForUser($user);
+        if (!$role || !in_array($role, ['owner', 'admin'])) {
             return response()->json(['message' => 'Hanya Owner atau Admin yang dapat menambah Soal ke Bank Soal.'], 403);
         }
 
@@ -169,6 +169,7 @@ class SoalController extends Controller
         }
 
         $createdCount = 0;
+        $createdSoalList = [];
         foreach ($validated['soal'] as $item) {
             $soal = Soal::create([
                 'kelas_id' => $classId,
@@ -187,6 +188,7 @@ class SoalController extends Controller
                     'urutan' => $idx + 1,
                 ]);
             }
+            $createdSoalList[] = $soal->load('opsi');
             $createdCount++;
         }
 
@@ -200,6 +202,7 @@ class SoalController extends Controller
         return response()->json([
             'status' => 'success',
             'message' => "Berhasil mengimpor {$createdCount} soal ke Bank Soal!",
+            'data' => $createdSoalList,
         ], 201);
     }
 }

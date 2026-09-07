@@ -1,16 +1,72 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { ChevronRight, Lightbulb, Target, Shield, Snowflake, BookOpen, ShieldAlert } from 'lucide-react';
+import { ChevronRight, Lightbulb, Target, Shield, Snowflake, BookOpen, ShieldAlert, Loader2, Sparkles } from 'lucide-react';
 import { useAppState } from '../context/AppStateContext';
 import PowerUpModal from '../components/PowerUpModal';
+import MateriModal from '../components/MateriModal';
+import { apiService } from '../services/apiService';
+
+const DEFAULT_HOMEPAGE_MATERI = [
+  {
+    id: 'mat-demo-1',
+    subject: 'PWP',
+    subjectName: 'PWP (Pemrograman Web)',
+    title: 'Pengenalan HTML5 & CSS3',
+    content: 'Materi dasar mengenai elemen struktur HTML5 dan penataan tampilan dengan selektor CSS3.',
+    status: 'verified',
+    version: 1
+  },
+  {
+    id: 'mat-demo-2',
+    subject: 'IND',
+    subjectName: 'Bahasa Indonesia',
+    title: 'Tata Bahasa & Kalimat Efektif',
+    content: 'Panduan tata bahasa Indonesia, aturan PUEBI, dan perancangan penulisan kalimat efektif.',
+    status: 'verified',
+    version: 1
+  },
+  {
+    id: 'mat-demo-3',
+    subject: 'MTK',
+    subjectName: 'Matematika',
+    title: 'Aljabar & Persamaan Linear',
+    content: 'Pembahasan konsep dasar variabel aljabar dan penyelesaian persamaan linear dua variabel.',
+    status: 'verified',
+    version: 1
+  }
+];
 
 export default function HomePage() {
   const { classId } = useParams();
-  const { appState, getLevelInfo, findClass, getClassXp } = useAppState();
+  const { appState, getLevelInfo, findClass, getClassXp, materiList } = useAppState();
   const [isPowerUpOpen, setIsPowerUpOpen] = useState(false);
+  const [dbMapelList, setDbMapelList] = useState([]);
+  const [dbMateriList, setDbMateriList] = useState([]);
+  const [selectedMateriId, setSelectedMateriId] = useState(null);
+  const [selectedMateriObj, setSelectedMateriObj] = useState(null);
+  const [isLoading, setIsLoading] = useState(Boolean(classId));
 
   const activeClass = classId && findClass ? findClass(classId) : null;
   const isApiClass = Boolean(classId && !String(classId).startsWith('cls-') && !isNaN(Number(classId)));
+
+  useEffect(() => {
+    if (classId) {
+      setIsLoading(true);
+      if (isApiClass) {
+        Promise.all([
+          apiService.getMapel(classId).catch(() => []),
+          apiService.getMateri(classId).catch(() => [])
+        ]).then(([mapels, materis]) => {
+          if (Array.isArray(mapels)) setDbMapelList(mapels);
+          if (Array.isArray(materis)) setDbMateriList(materis);
+        }).finally(() => {
+          setIsLoading(false);
+        });
+      } else {
+        setIsLoading(false);
+      }
+    }
+  }, [classId, isApiClass]);
 
   if (classId && !activeClass && !isApiClass) {
     return (
@@ -39,7 +95,38 @@ export default function HomePage() {
 
   const classXp = classId && getClassXp ? getClassXp(classId) : appState.xp;
   const levelInfo = getLevelInfo(classXp);
-  const progressPercent = Math.min(100, Math.max(0, (levelInfo.progress / levelInfo.max) * 100));
+  const progressPercent = levelInfo.percent;
+
+  const formattedApiMaterials = dbMateriList.map(item => {
+    const mapelObj = (dbMapelList || []).find(
+      mp => String(mp.id) === String(item.mapel_id) || mp.kode === item.mapel_id || String(mp.id) === String(item.mapel?.id)
+    ) || item.mapel;
+
+    const rawKode = item.mapel?.kode || mapelObj?.kode || (typeof item.subject === 'string' && isNaN(Number(item.subject)) ? item.subject : null);
+    const rawNama = item.mapel?.nama || mapelObj?.nama || item.subjectName;
+
+    const cleanKode = (rawKode || 'UMUM').toUpperCase();
+    const cleanNama = (rawNama && rawNama !== 'Mata Pelajaran' && rawNama !== cleanKode) ? rawNama : (cleanKode !== 'UMUM' ? cleanKode : 'Materi Umum');
+
+    const rawStatus = item.versi_aktif?.status || (item.versi && item.versi.length > 0 ? item.versi[item.versi.length - 1].status : (item.status || 'menunggu_verifikasi'));
+
+    return {
+      id: item.id,
+      classId: classId,
+      subject: cleanKode,
+      subjectName: cleanNama,
+      title: item.judul || item.title || 'Materi Pembelajaran',
+      content: item.isi || item.versi_aktif?.isi || item.content || '',
+      status: rawStatus,
+      version: item.versi_aktif?.nomor_versi || item.versi_aktif?.versi || item.version || 1
+    };
+  });
+
+  const rawMaterials = isApiClass ? formattedApiMaterials : [...formattedApiMaterials, ...(materiList || [])];
+  const verifiedMaterials = rawMaterials.filter(m => {
+    return m.status === 'terverifikasi' || m.status === 'verified' || m.status === 'Terverifikasi';
+  });
+  const displayMaterials = (verifiedMaterials.length > 0 ? verifiedMaterials : DEFAULT_HOMEPAGE_MATERI).slice(0, 3);
 
   return (
     <section className="px-4 md:px-8 pt-6 space-y-6 animate-fade-in flex flex-col max-w-7xl mx-auto w-full pb-24">
@@ -50,9 +137,9 @@ export default function HomePage() {
           <div className="absolute -right-8 -top-8 w-40 h-40 bg-white/10 rounded-full blur-3xl"></div>
           <div className="absolute -left-4 -bottom-12 w-32 h-32 bg-white/10 rounded-full blur-2xl"></div>
           <div className="relative z-10">
-            <p className="text-primary-foreground/80 text-[9px] sm:text-[10px] md:text-xs font-bold uppercase tracking-widest">Pangkat Saat Ini</p>
+            <p className="text-primary-foreground/80 text-[9px] sm:text-[10px] md:text-xs font-bold uppercase tracking-widest">Peringkat Saat Ini</p>
             <h2 className="text-sm sm:text-xl md:text-2xl font-extrabold mt-0.5 sm:mt-1 italic leading-tight">
-              {levelInfo.level > 10 ? 'Master Akademik' : 'Pemula EduVerse'}
+              {levelInfo.level >= 10 ? 'Master Akademik' : levelInfo.level >= 5 ? 'Cendikiawan EduVerse' : levelInfo.level >= 1 ? 'Pelajar EduVerse' : 'Pemula EduVerse'}
             </h2>
           </div>
           <div className="relative z-10 mt-2 sm:mt-3 md:mt-4">
@@ -108,19 +195,84 @@ export default function HomePage() {
         </div>
       </div>
 
-      {/* Subjects Showcase */}
+      {/* Materials Showcase */}
       <div className="space-y-3">
         <div className="flex items-center justify-between">
-          <h3 className="font-extrabold text-lg">Mata Pelajaran</h3>
+          <h3 className="font-extrabold text-lg">Materi Pelajaran Baru</h3>
+          <Link to={classId ? `/class/${classId}/materi` : '/materi'} className="text-primary text-xs font-bold flex items-center gap-0.5 hover:underline">
+            Lihat Semua Materi <ChevronRight className="w-3 h-3" />
+          </Link>
         </div>
-        <div className="bg-card rounded-3xl p-8 md:p-10 border border-border flex flex-col items-center justify-center text-center space-y-2 shadow-sm">
-          <BookOpen className="w-8 h-8 text-muted-foreground/60" />
-          <p className="font-extrabold text-sm text-foreground">Tidak Ada Pelajaran</p>
-          <p className="text-xs text-muted-foreground max-w-xs">Materi pelajaran belum ditambahkan oleh Owner atau Admin di kelas ini.</p>
-        </div>
+
+        {isLoading ? (
+          <div className="bg-card rounded-3xl p-8 border border-border flex flex-col items-center justify-center text-center space-y-2 shadow-sm animate-pulse">
+            <Loader2 className="w-8 h-8 text-primary animate-spin" />
+            <p className="font-extrabold text-xs text-foreground">Memuat Materi Pelajaran Kelas...</p>
+          </div>
+        ) : displayMaterials.length === 0 ? (
+          <div className="bg-card rounded-3xl p-8 md:p-10 border border-border flex flex-col items-center justify-center text-center space-y-2 shadow-sm">
+            <BookOpen className="w-8 h-8 text-muted-foreground/60" />
+            <p className="font-extrabold text-sm text-foreground">Tidak Ada Materi Pelajaran</p>
+            <p className="text-xs text-muted-foreground max-w-xs">Materi pelajaran belum ditambahkan di kelas ini.</p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5">
+            {displayMaterials.map((materi, idx) => {
+              const subjectCode = (materi.subject || 'MATERI').toUpperCase();
+              const subjectName = materi.subjectName || subjectCode;
+              const isV2 = (materi.version || 1) > 1;
+
+              return (
+                <div
+                  key={materi.id || idx}
+                  onClick={() => {
+                    setSelectedMateriId(materi.id);
+                    setSelectedMateriObj(materi);
+                  }}
+                  className="bg-card border border-border hover:border-primary/40 rounded-2xl p-4 shadow-sm transition-all flex items-center justify-between gap-3 group cursor-pointer"
+                >
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="w-10 h-10 rounded-xl bg-primary/10 border border-primary/20 grid place-items-center text-primary font-extrabold text-xs shadow-sm shrink-0">
+                      {subjectCode.slice(0, 4)}
+                    </div>
+                    <div className="min-w-0">
+                      <span className="text-[10px] font-extrabold text-muted-foreground uppercase tracking-wider block truncate">
+                        {subjectName}
+                      </span>
+                      <div className="flex items-center gap-2 flex-wrap mt-0.5">
+                        <h4 className="font-extrabold text-sm text-foreground truncate">{materi.title}</h4>
+                        {isV2 && (
+                          <span className="bg-primary/10 text-primary text-[9px] font-extrabold px-1.5 py-0.5 rounded-full border border-primary/20 shrink-0 flex items-center gap-1">
+                            <Sparkles className="w-2.5 h-2.5" /> v{materi.version}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div
+                    className="bg-muted group-hover:bg-primary/10 group-hover:text-primary text-muted-foreground p-2 rounded-xl transition-colors shrink-0"
+                    title="Baca Materi Ini"
+                  >
+                    <ChevronRight className="w-4 h-4" />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       <PowerUpModal isOpen={isPowerUpOpen} onClose={() => setIsPowerUpOpen(false)} />
+
+      <MateriModal
+        materi={selectedMateriObj}
+        materiId={selectedMateriId}
+        onClose={() => {
+          setSelectedMateriId(null);
+          setSelectedMateriObj(null);
+        }}
+      />
     </section>
   );
 }

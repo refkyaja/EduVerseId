@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Settings, RefreshCcw, Save, Trash2, AlertTriangle, ShieldAlert } from 'lucide-react';
 import { useAppState } from '../context/AppStateContext';
+import ConfirmModal from '../components/ConfirmModal';
 
 export default function ClassSettingsPage({ cls, onUpdateClassInfo, onRegenerateCode, onDeleteClass }) {
   const navigate = useNavigate();
@@ -10,25 +11,24 @@ export default function ClassSettingsPage({ cls, onUpdateClassInfo, onRegenerate
   const [name, setName] = useState(cls?.name || '');
   const [description, setDescription] = useState(cls?.description || '');
 
+  const [isRegenOpen, setIsRegenOpen] = useState(false);
+  const [isDeleteOpen, setIsDeleteOpen] = useState(false);
+
   const handleSaveInfo = (e) => {
     e.preventDefault();
     onUpdateClassInfo({ name, description });
     showToast("Informasi kelas berhasil diperbarui!");
   };
 
-  const handleRegenCode = () => {
-    if (confirm("Apakah Anda yakin ingin membuat ulang kode kelas? Kode lama tidak akan berlaku lagi.")) {
-      const newCode = onRegenerateCode();
-      showToast(`Kode kelas baru dibuat: "${newCode}"`);
-    }
+  const executeRegenCode = () => {
+    const newCode = onRegenerateCode();
+    showToast(`Kode kelas baru dibuat: "${newCode}"`);
   };
 
-  const handleDelete = () => {
-    if (confirm(`PERINGATAN: Apakah Anda yakin ingin menghapus kelas "${cls?.name}" secara permanen? Seluruh data akan hilang.`)) {
-      onDeleteClass(cls?.id);
-      showToast(`Kelas "${cls?.name}" telah dihapus.`);
-      navigate('/');
-    }
+  const executeDeleteClass = () => {
+    onDeleteClass(cls?.id);
+    showToast(`Kelas "${cls?.name}" telah dihapus.`);
+    navigate('/');
   };
 
   return (
@@ -94,7 +94,7 @@ export default function ClassSettingsPage({ cls, onUpdateClassInfo, onRegenerate
           </div>
           <button
             type="button"
-            onClick={handleRegenCode}
+            onClick={() => setIsRegenOpen(true)}
             className="bg-muted text-foreground font-bold px-4 py-2 rounded-xl text-xs flex items-center gap-1.5 hover:bg-muted/80 transition-colors cursor-pointer"
           >
             <RefreshCcw className="w-3.5 h-3.5 text-primary" /> Regenerate Kode
@@ -113,12 +113,34 @@ export default function ClassSettingsPage({ cls, onUpdateClassInfo, onRegenerate
         </p>
         <button
           type="button"
-          onClick={handleDelete}
+          onClick={() => setIsDeleteOpen(true)}
           className="bg-danger text-white font-extrabold px-5 py-2.5 rounded-xl text-xs shadow-md flex items-center gap-2 hover:bg-danger/90 transition-colors cursor-pointer"
         >
           <Trash2 className="w-4 h-4" /> Hapus Kelas Permanen
         </button>
       </div>
+
+      <ConfirmModal
+        isOpen={isRegenOpen}
+        onClose={() => setIsRegenOpen(false)}
+        onConfirm={executeRegenCode}
+        title="Buat Ulang Kode Kelas?"
+        description="Apakah Anda yakin ingin membuat ulang kode kelas? Kode lama tidak akan berlaku lagi untuk siswa yang ingin bergabung."
+        confirmText="Ya, Buat Kode Baru"
+        cancelText="Batal"
+        variant="primary"
+      />
+
+      <ConfirmModal
+        isOpen={isDeleteOpen}
+        onClose={() => setIsDeleteOpen(false)}
+        onConfirm={executeDeleteClass}
+        title="Hapus Kelas Permanen?"
+        description={`PERINGATAN: Apakah Anda yakin ingin menghapus kelas "${cls?.name}" secara permanen? Seluruh data pengumuman, materi, kuis, dan data keanggotaan akan hilang.`}
+        confirmText="Ya, Hapus Kelas"
+        cancelText="Batal"
+        variant="danger"
+      />
     </div>
   );
 }

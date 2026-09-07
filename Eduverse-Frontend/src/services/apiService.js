@@ -126,6 +126,17 @@ export const apiService = {
     return result.data || [];
   },
 
+  async getLeaderboard(classId) {
+    const res = await fetch(`${API_BASE_URL}/classes/${classId}/leaderboard`, {
+      headers: getAuthHeaders(),
+    });
+    const result = await res.json();
+    if (!res.ok || result.status !== 'success') {
+      throw new Error(result.message || 'Gagal mengambil leaderboard');
+    }
+    return result.data || [];
+  },
+
   async promoteMember(classId, userId) {
     const res = await fetch(`${API_BASE_URL}/classes/${classId}/members/${userId}/promote`, {
       method: 'POST',
@@ -184,6 +195,31 @@ export const apiService = {
     return result.data;
   },
 
+  async updateMapel(classId, mapelId, data) {
+    const res = await fetch(`${API_BASE_URL}/classes/${classId}/mapel/${mapelId}`, {
+      method: 'PUT',
+      headers: getAuthHeaders(),
+      body: JSON.stringify(data),
+    });
+    const result = await res.json();
+    if (!res.ok || result.status !== 'success') {
+      throw new Error(result.message || 'Gagal memperbarui mata pelajaran');
+    }
+    return result.data;
+  },
+
+  async deleteMapel(classId, mapelId) {
+    const res = await fetch(`${API_BASE_URL}/classes/${classId}/mapel/${mapelId}`, {
+      method: 'DELETE',
+      headers: getAuthHeaders(),
+    });
+    const result = await res.json();
+    if (!res.ok || result.status !== 'success') {
+      throw new Error(result.message || 'Gagal menghapus mata pelajaran');
+    }
+    return result;
+  },
+
   // --- MATERI & VERIFIKASI ---
   async getMateri(classId) {
     const res = await fetch(`${API_BASE_URL}/classes/${classId}/materi`, {
@@ -191,6 +227,14 @@ export const apiService = {
     });
     const result = await res.json();
     return result.data || [];
+  },
+
+  async getMateriDetail(classId, materiId) {
+    const res = await fetch(`${API_BASE_URL}/classes/${classId}/materi/${materiId}`, {
+      headers: getAuthHeaders(),
+    });
+    const result = await res.json();
+    return result.data;
   },
 
   async createMateri(classId, data) {
@@ -219,6 +263,30 @@ export const apiService = {
     return result;
   },
 
+  async deleteMateriVersion(classId, versiId) {
+    const res = await fetch(`${API_BASE_URL}/classes/${classId}/materi-versi/${versiId}`, {
+      method: 'DELETE',
+      headers: getAuthHeaders(),
+    });
+    const result = await res.json();
+    if (!res.ok || result.status !== 'success') {
+      throw new Error(result.message || 'Gagal menghapus versi materi');
+    }
+    return result;
+  },
+
+  async deleteMateri(classId, materiId) {
+    const res = await fetch(`${API_BASE_URL}/classes/${classId}/materi/${materiId}`, {
+      method: 'DELETE',
+      headers: getAuthHeaders(),
+    });
+    const result = await res.json();
+    if (!res.ok || result.status !== 'success') {
+      throw new Error(result.message || 'Gagal menghapus materi');
+    }
+    return result;
+  },
+
   async verifyMateriVersi(classId, versiId, data) {
     const res = await fetch(`${API_BASE_URL}/classes/${classId}/materi-versi/${versiId}/verify`, {
       method: 'POST',
@@ -241,6 +309,30 @@ export const apiService = {
     return result.data || [];
   },
 
+  async getKuisDetail(classId, kuisId) {
+    const res = await fetch(`${API_BASE_URL}/classes/${classId}/kuis/${kuisId}`, {
+      headers: getAuthHeaders(),
+    });
+    const result = await res.json();
+    if (!res.ok || result.status !== 'success') {
+      throw new Error(result.message || 'Gagal mengambil detail kuis');
+    }
+    return result.data;
+  },
+
+  async submitQuizAttempt(classId, kuisId, data) {
+    const res = await fetch(`${API_BASE_URL}/classes/${classId}/kuis/${kuisId}/submit`, {
+      method: 'POST',
+      headers: getAuthHeaders(),
+      body: JSON.stringify(data),
+    });
+    const result = await res.json();
+    if (!res.ok || result.status !== 'success') {
+      throw new Error(result.message || 'Gagal mengirimkan jawaban kuis');
+    }
+    return result.data;
+  },
+
   async createKuis(classId, data) {
     const res = await fetch(`${API_BASE_URL}/classes/${classId}/kuis`, {
       method: 'POST',
@@ -252,6 +344,31 @@ export const apiService = {
       throw new Error(result.message || 'Gagal menerbitkan kuis');
     }
     return result.data;
+  },
+
+  async updateKuis(classId, kuisId, data) {
+    const res = await fetch(`${API_BASE_URL}/classes/${classId}/kuis/${kuisId}`, {
+      method: 'PUT',
+      headers: getAuthHeaders(),
+      body: JSON.stringify(data),
+    });
+    const result = await res.json();
+    if (!res.ok || result.status !== 'success') {
+      throw new Error(result.message || 'Gagal memperbarui kuis');
+    }
+    return result.data;
+  },
+
+  async deleteKuis(classId, kuisId) {
+    const res = await fetch(`${API_BASE_URL}/classes/${classId}/kuis/${kuisId}`, {
+      method: 'DELETE',
+      headers: getAuthHeaders(),
+    });
+    const result = await res.json();
+    if (!res.ok || result.status !== 'success') {
+      throw new Error(result.message || 'Gagal menghapus kuis');
+    }
+    return result;
   },
 
   async parseSoalTeks(classId, teks) {

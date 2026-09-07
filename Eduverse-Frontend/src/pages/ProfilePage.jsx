@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useParams, useNavigate, useLocation, useSearchParams } from 'react-router-dom';
-import { Settings, ChevronRight, ChevronDown, ShieldCheck, Users, Swords, Flame, Trophy, Award, Zap, CheckCircle2, TrendingUp, AlertCircle, BookOpen, Target, Calendar, Plus, FolderPlus, FileText, Sparkles, RefreshCcw, History, Clock, UserCheck, KeyRound, Save, Trash2, Pencil, X, ShieldAlert, BarChart3, Copy, Check, Eye } from 'lucide-react';
+import { Settings, ChevronRight, ChevronDown, ShieldCheck, Users, Swords, Flame, Trophy, Award, Zap, CheckCircle2, TrendingUp, AlertCircle, BookOpen, Target, Calendar, Plus, FolderPlus, FileText, Sparkles, RefreshCcw, History, Clock, UserCheck, KeyRound, Save, Trash2, Pencil, X, XCircle, ShieldAlert, BarChart3, Copy, Check, Eye, Loader2, Search } from 'lucide-react';
 import { useAppState } from '../context/AppStateContext';
 import { INITIAL_CLASSES } from '../data/mockData';
 import ClassSettingsModal from '../components/ClassSettingsModal';
 import ClassAnggotaPage from './ClassAnggotaPage';
 import ConfirmModal from '../components/ConfirmModal';
+import MaterialVersionDropdown from '../components/MaterialVersionDropdown';
 import { apiService } from '../services/apiService';
 
 export default function ProfilePage({ initialTab }) {
@@ -13,7 +14,7 @@ export default function ProfilePage({ initialTab }) {
   const navigate = useNavigate();
   const location = useLocation();
   const [searchParams] = useSearchParams();
-  const { appState, userProfile, getLevelInfo, showToast, currentUser, findClass, updateClassInfo, addMateri, addQuiz } = useAppState();
+  const { appState, userProfile, getLevelInfo, showToast, currentUser, findClass, updateClassInfo, addMateri, updateMateriInState, addQuiz, isLoadingClasses } = useAppState();
 
   const getTabFromPath = () => {
     if (initialTab) return initialTab;
@@ -33,9 +34,48 @@ export default function ProfilePage({ initialTab }) {
   const isApiClass = Boolean(routeClassId && !String(routeClassId).startsWith('cls-') && !isNaN(Number(routeClassId)));
   const isDemoClass = !isApiClass;
 
-  const activeRole = activeClass?.role || currentUser?.activeRole || currentUser?.role || 'member';
+  const getActiveRole = () => {
+    if (activeClass?.role) return activeClass.role.toLowerCase();
+    if (isApiClass && isLoadingClasses) return null;
+    if (currentUser?.activeRole) return String(currentUser.activeRole).toLowerCase();
+    if (currentUser?.role && currentUser.role !== 'user') return String(currentUser.role).toLowerCase();
+    if (!isLoadingClasses && isApiClass && !activeClass) return 'member';
+    if (isDemoClass) return 'owner';
+    return null;
+  };
+
+  const activeRole = getActiveRole();
+  const isRoleLoading = activeRole === null;
   const [activeTab, setActiveTab] = useState(getTabFromPath());
   const [isManagementOpen, setIsManagementOpen] = useState(true);
+  const [userRank, setUserRank] = useState(1);
+
+  useEffect(() => {
+    let isMounted = true;
+    const fetchRank = async () => {
+      const targetClassId = routeClassId || activeClass?.id;
+      if (targetClassId && !String(targetClassId).startsWith('cls-') && !isNaN(Number(targetClassId))) {
+        try {
+          const lbData = await apiService.getLeaderboard(targetClassId);
+          if (isMounted && Array.isArray(lbData) && lbData.length > 0) {
+            const myEntry = lbData.find(m => String(m.user_id || m.id) === String(currentUser?.id) || m.is_current_user);
+            if (myEntry && (myEntry.rank || myEntry.rank === 0)) {
+              setUserRank(myEntry.rank);
+              return;
+            }
+          }
+        } catch (e) {
+          console.warn("Failed to fetch user rank from leaderboard:", e);
+        }
+      }
+      if (isMounted) {
+        setUserRank(1);
+      }
+    };
+
+    fetchRank();
+    return () => { isMounted = false; };
+  }, [routeClassId, activeClass?.id, currentUser?.id]);
 
   useEffect(() => {
     setActiveTab(getTabFromPath());
@@ -68,12 +108,7 @@ export default function ProfilePage({ initialTab }) {
   }, [activeClass?.id, activeClass?.name, activeClass?.description, activeClass?.code]);
 
   // DB Mapel & Materi Dynamic States
-  const [dbMapelList, setDbMapelList] = useState([
-    { id: 1, kode: 'PWP', nama: 'PWP (Pemrograman Web)', warna: 'from-indigo-500 to-purple-600' },
-    { id: 2, kode: 'IND', nama: 'Bahasa Indonesia', warna: 'from-blue-500 to-cyan-500' },
-    { id: 3, kode: 'MTK', nama: 'Matematika', warna: 'from-amber-500 to-orange-500' },
-    { id: 4, kode: 'PPAN', nama: 'Pendidikan Pancasila', warna: 'from-emerald-500 to-teal-500' }
-  ]);
+  const [dbMapelList, setDbMapelList] = useState([]);
   const [isCreateSubjectOpen, setIsCreateSubjectOpen] = useState(false);
 
   const [dbMateriList, setDbMateriList] = useState([]);
@@ -82,7 +117,7 @@ export default function ProfilePage({ initialTab }) {
   // Edit Material State (Creating v2, v3...)
   const [editingMaterial, setEditingMaterial] = useState(null);
   const [editMaterialTitle, setEditMaterialTitle] = useState('');
-  const [editMaterialSubject, setEditMaterialSubject] = useState('PWP');
+  const [editMaterialSubject, setEditMaterialSubject] = useState('');
   const [editMaterialContent, setEditMaterialContent] = useState('');
 
   // Side-by-side Verification Preview State
@@ -92,15 +127,81 @@ export default function ProfilePage({ initialTab }) {
   const [newSubjectName, setNewSubjectName] = useState('');
   const [newSubjectCode, setNewSubjectCode] = useState('');
   const [newSubjectGradient, setNewSubjectGradient] = useState('from-indigo-500 to-purple-600');
+  const [editingMapel, setEditingMapel] = useState(null);
+  const [editMapelCode, setEditMapelCode] = useState('');
+  const [editMapelName, setEditMapelName] = useState('');
+  const [isSavingSubject, setIsSavingSubject] = useState(false);
+  const [isUpdatingSubject, setIsUpdatingSubject] = useState(false);
+  const [isLoadingMapel, setIsLoadingMapel] = useState(Boolean(isApiClass && routeClassId));
+  const [isLoadingMateri, setIsLoadingMateri] = useState(Boolean(isApiClass && routeClassId));
+  const [isLoadingQuiz, setIsLoadingQuiz] = useState(Boolean(isApiClass && routeClassId));
+  const [isLoadingMembers, setIsLoadingMembers] = useState(Boolean(isApiClass && routeClassId));
+
+  const [dbQuizList, setDbQuizList] = useState([]);
+  const [isCreateQuizOpen, setIsCreateQuizOpen] = useState(false);
+  const [editingQuiz, setEditingQuiz] = useState(null);
+  const [isSavingQuiz, setIsSavingQuiz] = useState(false);
+  const [isUpdatingQuiz, setIsUpdatingQuiz] = useState(false);
+
+  const [selectedMaterialMapelFilter, setSelectedMaterialMapelFilter] = useState('ALL');
+  const [selectedQuizMapelFilter, setSelectedQuizMapelFilter] = useState('ALL');
+  const [materialSearchQuery, setMaterialSearchQuery] = useState('');
+  const [quizSearchQuery, setQuizSearchQuery] = useState('');
+
+  const filteredMateriList = (dbMateriList || []).filter(materi => {
+    const matchesMapel = selectedMaterialMapelFilter === 'ALL' ||
+      String(materi.subject || '').toUpperCase() === String(selectedMaterialMapelFilter).toUpperCase() ||
+      String(materi.subjectName || '').toUpperCase().includes(String(selectedMaterialMapelFilter).toUpperCase());
+    const qLower = materialSearchQuery.trim().toLowerCase();
+    const matchesSearch = !qLower ||
+      String(materi.title || '').toLowerCase().includes(qLower) ||
+      String(materi.subject || '').toLowerCase().includes(qLower) ||
+      String(materi.subjectName || '').toLowerCase().includes(qLower);
+    return matchesMapel && matchesSearch;
+  });
+
+  const filteredQuizList = (dbQuizList || []).filter(quiz => {
+    const matchesMapel = selectedQuizMapelFilter === 'ALL' ||
+      String(quiz.subject || '').toUpperCase() === String(selectedQuizMapelFilter).toUpperCase() ||
+      String(quiz.subjectName || '').toUpperCase().includes(String(selectedQuizMapelFilter).toUpperCase());
+    const qLower = quizSearchQuery.trim().toLowerCase();
+    const matchesSearch = !qLower ||
+      String(quiz.title || '').toLowerCase().includes(qLower) ||
+      String(quiz.subject || '').toLowerCase().includes(qLower) ||
+      String(quiz.subjectName || '').toLowerCase().includes(qLower);
+    return matchesMapel && matchesSearch;
+  });
+
+  const [confirmModalState, setConfirmModalState] = useState({
+    isOpen: false,
+    title: '',
+    description: '',
+    confirmText: 'Hapus',
+    variant: 'danger',
+    onConfirm: () => {}
+  });
+
+  const triggerConfirmModal = ({ title, description, confirmText = 'Hapus', variant = 'danger', onConfirm }) => {
+    setConfirmModalState({
+      isOpen: true,
+      title,
+      description,
+      confirmText,
+      variant,
+      onConfirm
+    });
+  };
 
   const [newMaterialTitle, setNewMaterialTitle] = useState('');
-  const [newMaterialSubject, setNewMaterialSubject] = useState('PWP');
+  const [newMaterialSubject, setNewMaterialSubject] = useState('');
   const [newMaterialContent, setNewMaterialContent] = useState('');
 
   const [newQuizTitle, setNewQuizTitle] = useState('');
   const [newQuizDesc, setNewQuizDesc] = useState('');
-  const [newQuizSubject, setNewQuizSubject] = useState('PWP');
+  const [newQuizSubject, setNewQuizSubject] = useState('');
   const [quizInputMode, setQuizInputMode] = useState('manual');
+  const [acakSoal, setAcakSoal] = useState(false);
+  const [acakOpsi, setAcakOpsi] = useState(false);
 
   const PROMPT_TEMPLATE = `Buatkan [jumlah] soal pilihan ganda tentang [topik] (bisa opsi A hingga E), masing-masing dengan format persis seperti contoh ini:
 
@@ -119,46 +220,105 @@ Pisahkan tiap soal dengan baris kosong. Jangan pakai markdown (bold/italic), jan
   // Load Mapel from DB
   useEffect(() => {
     if (isApiClass && routeClassId) {
+      setIsLoadingMapel(true);
       apiService.getMapel(routeClassId)
         .then(list => {
-          if (Array.isArray(list) && list.length > 0) {
+          if (Array.isArray(list)) {
             setDbMapelList(list.map(m => ({
               id: m.id,
               kode: m.kode || 'MAPEL',
               nama: m.nama || 'Mata Pelajaran',
               warna: m.warna || 'from-indigo-500 to-purple-600'
             })));
-            setNewMaterialSubject(list[0].kode);
-            setNewQuizSubject(list[0].kode);
+            if (list.length > 0) {
+              setNewMaterialSubject(list[0].kode);
+              setNewQuizSubject(list[0].kode);
+            }
           }
         })
-        .catch(() => {});
+        .catch(() => {})
+        .finally(() => {
+          setIsLoadingMapel(false);
+        });
+    } else {
+      setIsLoadingMapel(false);
     }
   }, [isApiClass, routeClassId]);
 
   // Load Materi from DB
   useEffect(() => {
     if (isApiClass && routeClassId) {
+      setIsLoadingMateri(true);
       apiService.getMateri(routeClassId)
         .then(list => {
           if (Array.isArray(list)) {
-            setDbMateriList(list.map(m => ({
-              id: m.id,
-              subject: m.mapel?.kode || 'MATERI',
-              subjectName: m.mapel?.nama || 'Mata Pelajaran',
-              title: m.judul,
-              content: m.versi_aktif?.isi || m.isi || '',
-              version: m.versi_aktif?.nomor_versi || 1,
-              status: m.versi_aktif?.status || 'terverifikasi',
-              createdAt: m.created_at ? new Date(m.created_at).toLocaleDateString() : 'Hari ini',
-              author: m.creator?.name || 'Owner',
-              versions: m.versi || []
-            })));
+            setDbMateriList(list.map(m => {
+              const matchedMapel = (dbMapelList || []).find(mp => String(mp.id) === String(m.mapel_id) || mp.kode === m.mapel_id) || m.mapel;
+              const rawKode = m.mapel?.kode || matchedMapel?.kode || (typeof m.mapel_id === 'string' && isNaN(Number(m.mapel_id)) ? m.mapel_id : null);
+              const rawNama = m.mapel?.nama || matchedMapel?.nama;
+              const cleanKode = (rawKode || 'UMUM').toUpperCase();
+              const cleanNama = (rawNama && rawNama !== 'Mata Pelajaran') ? rawNama : (cleanKode !== 'UMUM' ? cleanKode : 'Materi Umum');
+
+              return {
+                id: m.id,
+                subject: cleanKode,
+                subjectName: cleanNama,
+                title: m.judul,
+                content: m.versi_aktif?.isi || m.isi || '',
+                version: m.versi_aktif?.nomor_versi || (m.versi && m.versi.length > 0 ? m.versi[m.versi.length - 1].nomor_versi : 1),
+                status: m.versi_aktif?.status || (m.versi && m.versi.length > 0 ? m.versi[m.versi.length - 1].status : (m.status || 'menunggu_verifikasi')),
+                createdAt: m.created_at ? new Date(m.created_at).toLocaleDateString() : 'Hari ini',
+                author: m.creator?.name || 'Owner',
+                versions: m.versi || []
+              };
+            }));
           }
         })
-        .catch(() => {});
+        .catch(() => {})
+        .finally(() => {
+          setIsLoadingMateri(false);
+        });
+    } else {
+      setIsLoadingMateri(false);
     }
-  }, [isApiClass, routeClassId]);
+  }, [isApiClass, routeClassId, dbMapelList]);
+
+  // Load Quiz from DB
+  useEffect(() => {
+    if (isApiClass && routeClassId) {
+      setIsLoadingQuiz(true);
+      apiService.getKuis(routeClassId)
+        .then(list => {
+          if (Array.isArray(list)) {
+            setDbQuizList(list.map(q => {
+              const matchedMapel = (dbMapelList || []).find(mp => String(mp.id) === String(q.mapel_id) || mp.kode === q.mapel_id) || q.mapel;
+              const rawKode = q.mapel?.kode || matchedMapel?.kode || (typeof q.mapel_id === 'string' && isNaN(Number(q.mapel_id)) ? q.mapel_id : null);
+              const rawNama = q.mapel?.nama || matchedMapel?.nama;
+              const cleanKode = (rawKode || 'UMUM').toUpperCase();
+              const cleanNama = (rawNama && rawNama !== 'Mata Pelajaran') ? rawNama : (cleanKode !== 'UMUM' ? cleanKode : 'Kuis & Ujian Umum');
+
+              return {
+                id: q.id,
+                title: q.judul || q.title || 'Ujian / Kuis',
+                description: q.deskripsi || '',
+                subject: cleanKode,
+                subjectName: cleanNama,
+                questionsCount: q.soal_count ?? q.jumlah_soal ?? (q.soal ? q.soal.length : 0),
+                acak_soal: Boolean(q.acak_soal),
+                acak_opsi: Boolean(q.acak_opsi),
+                mapelId: q.mapel_id
+              };
+            }));
+          }
+        })
+        .catch(() => {})
+        .finally(() => {
+          setIsLoadingQuiz(false);
+        });
+    } else {
+      setIsLoadingQuiz(false);
+    }
+  }, [isApiClass, routeClassId, dbMapelList]);
 
   // Load Members from DB
   const [dbMemberList, setDbMemberList] = useState([]);
@@ -166,6 +326,7 @@ Pisahkan tiap soal dengan baris kosong. Jangan pakai markdown (bold/italic), jan
   useEffect(() => {
     const fetchMembers = async () => {
       if (isApiClass && routeClassId) {
+        setIsLoadingMembers(true);
         try {
           const list = await apiService.getMembers(routeClassId);
           if (Array.isArray(list)) {
@@ -181,6 +342,8 @@ Pisahkan tiap soal dengan baris kosong. Jangan pakai markdown (bold/italic), jan
           }
         } catch (e) {
           console.error("Failed to load members from API:", e);
+        } finally {
+          setIsLoadingMembers(false);
         }
       }
       // Real member data from active class or API only (NO DUMMY DATA!)
@@ -196,6 +359,7 @@ Pisahkan tiap soal dengan baris kosong. Jangan pakai markdown (bold/italic), jan
           avatar: currentUser.avatar
         }] : []);
       }
+      setIsLoadingMembers(false);
     };
     fetchMembers();
   }, [isApiClass, routeClassId, activeClass, currentUser, activeRole]);
@@ -284,32 +448,37 @@ Pisahkan tiap soal dengan baris kosong. Jangan pakai markdown (bold/italic), jan
       apiService.getMateri(routeClassId)
         .then(list => {
           if (Array.isArray(list)) {
-            const pending = list.filter(m => m.versi_aktif?.status === 'menunggu_verifikasi');
-            setPendingMaterials(pending.map(m => {
-              const prevV = m.versi ? m.versi.find(v => v.nomor_versi === (m.versi_aktif?.nomor_versi || 1) - 1) : null;
-              return {
-                id: m.id,
-                versiId: m.versi_aktif?.id,
-                subject: m.mapel?.kode || 'MATERI',
-                title: m.judul,
-                author: m.creator?.name || m.creator?.username || 'Admin',
-                createdAt: m.created_at ? new Date(m.created_at).toLocaleDateString() : 'Hari ini',
-                prevVersion: prevV ? {
-                  version: prevV.nomor_versi,
+            const pendingItems = [];
+            list.forEach(m => {
+              const pendingVersi = (m.versi || []).find(v => v.status === 'menunggu_verifikasi') || 
+                                   (m.versi_aktif?.status === 'menunggu_verifikasi' ? m.versi_aktif : null);
+              if (pendingVersi) {
+                const prevV = (m.versi || []).find(v => v.nomor_versi === pendingVersi.nomor_versi - 1 || (v.status === 'terverifikasi' && String(v.id) !== String(pendingVersi.id))) || m.versi_aktif;
+                pendingItems.push({
+                  id: m.id,
+                  versiId: pendingVersi.id,
+                  subject: m.mapel?.kode || 'MATERI',
                   title: m.judul,
-                  content: prevV.isi,
-                  status: 'terverifikasi',
-                  author: 'Owner'
-                } : null,
-                newVersion: {
-                  version: m.versi_aktif?.nomor_versi || 1,
-                  title: m.judul,
-                  content: m.versi_aktif?.isi || '',
-                  status: 'menunggu_verifikasi',
-                  author: m.creator?.name || 'Admin'
-                }
-              };
-            }));
+                  author: pendingVersi.creator?.name || pendingVersi.creator?.username || m.creator?.name || 'Admin',
+                  createdAt: pendingVersi.created_at ? new Date(pendingVersi.created_at).toLocaleDateString('id-ID') : 'Hari ini',
+                  prevVersion: (prevV && String(prevV.id) !== String(pendingVersi.id)) ? {
+                    version: prevV.nomor_versi || 1,
+                    title: m.judul,
+                    content: prevV.isi || '',
+                    status: prevV.status || 'terverifikasi',
+                    author: prevV.creator?.name || 'Owner'
+                  } : null,
+                  newVersion: {
+                    version: pendingVersi.nomor_versi || 1,
+                    title: m.judul,
+                    content: pendingVersi.isi || '',
+                    status: 'menunggu_verifikasi',
+                    author: pendingVersi.creator?.name || pendingVersi.creator?.username || m.creator?.name || 'Admin'
+                  }
+                });
+              }
+            });
+            setPendingMaterials(pendingItems);
           }
         })
         .catch(() => {});
@@ -321,7 +490,26 @@ Pisahkan tiap soal dengan baris kosong. Jangan pakai markdown (bold/italic), jan
       if (isApiClass && routeClassId && versiId) {
         await apiService.verifyMateriVersi(routeClassId, versiId, { status: 'terverifikasi' });
       }
-      setPendingMaterials(prev => prev.filter(m => m.id !== materiId));
+      setPendingMaterials(prev => prev.filter(m => String(m.versiId) !== String(versiId) && String(m.id) !== String(materiId)));
+      setDbMateriList(prev => prev.map(m => (String(m.id) === String(materiId)) ? { ...m, status: 'terverifikasi' } : m));
+      if (isApiClass && routeClassId) {
+        apiService.getMateri(routeClassId).then(list => {
+          if (Array.isArray(list)) {
+            setDbMateriList(list.map(m => ({
+              id: m.id,
+              subject: (m.mapel?.kode || 'UMUM').toUpperCase(),
+              subjectName: m.mapel?.nama || 'Materi Umum',
+              title: m.judul,
+              content: m.versi_aktif?.isi || m.isi || '',
+              version: m.versi_aktif?.nomor_versi || 1,
+              status: m.versi_aktif?.status || 'terverifikasi',
+              createdAt: m.created_at ? new Date(m.created_at).toLocaleDateString() : 'Hari ini',
+              author: m.creator?.name || 'Owner',
+              versions: m.versi || []
+            })));
+          }
+        });
+      }
       showToast(`Materi "${title}" berhasil diverifikasi & diterbitkan!`);
     } catch (err) {
       showToast(err.message || "Gagal memverifikasi materi");
@@ -333,43 +521,80 @@ Pisahkan tiap soal dengan baris kosong. Jangan pakai markdown (bold/italic), jan
       if (isApiClass && routeClassId && versiId) {
         await apiService.verifyMateriVersi(routeClassId, versiId, { status: 'ditolak' });
       }
-      setPendingMaterials(prev => prev.filter(m => m.id !== materiId));
+      setPendingMaterials(prev => prev.filter(m => String(m.versiId) !== String(versiId) && String(m.id) !== String(materiId)));
+      setDbMateriList(prev => prev.map(m => (String(m.id) === String(materiId)) ? { ...m, status: 'ditolak' } : m));
       showToast(`Materi "${title}" ditolak.`);
     } catch (err) {
       showToast(err.message || "Gagal menolak materi");
     }
   };
 
-  const displayXp = currentUser?.xp ?? appState?.xp ?? 0;
-  const levelInfo = getLevelInfo(displayXp);
-  const displayExams = currentUser?.exams_completed ?? appState?.examsCompleted ?? 0;
-  const displayAccuracy = currentUser?.accuracy !== undefined
-    ? currentUser.accuracy
-    : ((displayExams > 0 && (appState?.correctAnswers ?? 0) > 0)
-        ? Math.round((appState.correctAnswers / (displayExams * 5)) * 100)
-        : 0);
-  const displayStreak = currentUser?.streak ?? appState?.streak ?? 0;
+  const displayXp = currentUser?.xp ?? appState.xp ?? 0;
+  const displayExams = currentUser?.exams_completed ?? appState.examsCompleted ?? 0;
+  const correctAnswers = appState.correctAnswers || 0;
+  const totalQuestionsAttempted = appState.totalQuestionsAttempted || (displayExams > 0 ? displayExams * 5 : 0);
 
+  const displayAccuracy = totalQuestionsAttempted > 0
+    ? Math.min(100, Math.round((correctAnswers / totalQuestionsAttempted) * 100))
+    : 0;
+
+  const displayStreak = currentUser?.streak ?? appState.streak ?? 0;
+  const levelInfo = getLevelInfo(displayXp);
+
+  // Subject Performance Analysis
+  const subjectStats = appState.subjectStats || {};
+  const MAPEL_NAME_MAP = {
+    IND: 'Bahasa Indonesia',
+    BIND: 'Bahasa Indonesia',
+    MTK: 'Matematika',
+    PWP: 'Pemrograman Web',
+    WEB: 'Pemrograman Web',
+    PPAN: 'Pendidikan Pancasila',
+    PKN: 'Pendidikan Pancasila',
+    ING: 'Bahasa Inggris',
+    BING: 'Bahasa Inggris',
+    PABP: 'Pendidikan Agama & Budi Pekerti',
+    IPA: 'Ilmu Pengetahuan Alam',
+    IPS: 'Ilmu Pengetahuan Sosial',
+    UMUM: 'Umum'
+  };
+
+  const subjectPerformanceList = Object.entries(subjectStats)
+    .filter(([_, stat]) => stat && stat.total > 0)
+    .map(([code, stat]) => {
+      const acc = Math.round((stat.correct / stat.total) * 100);
+      const name = MAPEL_NAME_MAP[code.toUpperCase()] || code.toUpperCase();
+      return { code, name, accuracy: acc, correct: stat.correct, total: stat.total };
+    });
+
+  const sortedSubjects = [...subjectPerformanceList].sort((a, b) => {
+    if (b.accuracy !== a.accuracy) return b.accuracy - a.accuracy;
+    return b.correct - a.correct;
+  });
+
+  const topSubjects = sortedSubjects.filter(s => s.accuracy >= 50);
+  const weakSubjects = [...sortedSubjects].filter(s => s.accuracy < 80).reverse();
+
+  // Streak tracking calendar (last 7 days simulation)
   const streakDays = [
-    { day: 'Sen', active: false },
-    { day: 'Sel', active: false },
-    { day: 'Rab', active: false },
-    { day: 'Kam', active: false },
-    { day: 'Jum', active: false },
-    { day: 'Sab', active: false },
-    { day: 'Min', active: false },
+    { day: 'SEN', active: displayStreak >= 1 },
+    { day: 'SEL', active: displayStreak >= 2 },
+    { day: 'RAB', active: displayStreak >= 3 },
+    { day: 'KAM', active: displayStreak >= 4 },
+    { day: 'JUM', active: displayStreak >= 5 },
+    { day: 'SAB', active: displayStreak >= 6 },
+    { day: 'MIN', active: displayStreak >= 7 },
   ];
 
+  // Badges unlock based on user stats
   const badges = [
-    { title: 'Master Matriks', desc: 'Selesaikan 10 Ujian Matriks', icon: Zap, color: 'text-warning bg-warning/15', unlocked: false },
-    { title: 'Kutu Buku', desc: 'Pelajari 20 Materi Belajar', icon: BookOpen, color: 'text-success bg-success/15', unlocked: false },
-    { title: 'Sniper Akademik', desc: 'Raih Skor 100% pada Ujian', icon: Target, color: 'text-brand-blue bg-brand-blue/15', unlocked: false },
-    { title: 'Serangan Fajar', desc: 'Belajar Sebelum Jam 6 Pagi', icon: Flame, color: 'text-rose-500 bg-rose-500/15', unlocked: false },
+    { icon: Trophy, title: 'Kuis Pertama', desc: 'Selesaikan 1 kuis ujian', unlocked: displayExams >= 1, color: 'bg-amber-500/10 text-amber-500' },
+    { icon: Flame, title: 'Streak 3 Hari', desc: 'Belajar 3 hari berturut-turut', unlocked: displayStreak >= 3, color: 'bg-rose-500/10 text-rose-500' },
+    { icon: Target, title: 'Akurasi Tinggi', desc: 'Mencapai akurasi di atas 80%', unlocked: displayAccuracy >= 80 && displayExams >= 1, color: 'bg-emerald-500/10 text-emerald-500' },
+    { icon: Award, title: 'XP Hunter', desc: 'Kumpulkan 500 Total XP', unlocked: displayXp >= 500, color: 'bg-purple-500/10 text-purple-500' },
   ];
 
   const recentActivity = [];
-  const topSubjects = [];
-  const weakSubjects = [];
 
   const handleSaveClassInfo = async (e) => {
     e.preventDefault();
@@ -449,26 +674,43 @@ Pisahkan tiap soal dengan baris kosong. Jangan pakai markdown (bold/italic), jan
 
   const handleCreateSubject = async (e) => {
     e.preventDefault();
-    if (!newSubjectName.trim() || !newSubjectCode.trim()) return;
+    if (isSavingSubject) return;
 
+    const trimmedName = newSubjectName.trim();
+    const trimmedCode = newSubjectCode.trim().toUpperCase();
+
+    if (!trimmedName || !trimmedCode) return;
+
+    // Check duplicate locally first
+    const isDuplicate = dbMapelList.some(
+      m => (m.kode && m.kode.toUpperCase() === trimmedCode) ||
+           (m.nama && m.nama.trim().toLowerCase() === trimmedName.toLowerCase())
+    );
+
+    if (isDuplicate) {
+      showToast(`Mata pelajaran "${trimmedName}" atau kode "${trimmedCode}" sudah ada di kelas ini!`, 'error');
+      return;
+    }
+
+    setIsSavingSubject(true);
     try {
       let created;
       if (isApiClass && routeClassId) {
         created = await apiService.createMapel(routeClassId, {
-          nama: newSubjectName,
-          kode: newSubjectCode,
+          nama: trimmedName,
+          kode: trimmedCode,
           warna: newSubjectGradient
         });
       }
       const newMapelObj = created ? {
         id: created.id,
-        kode: created.kode || newSubjectCode.toUpperCase(),
-        nama: created.nama || newSubjectName,
+        kode: created.kode || trimmedCode,
+        nama: created.nama || trimmedName,
         warna: created.warna || newSubjectGradient
       } : {
         id: `mapel-${Date.now()}`,
-        nama: newSubjectName,
-        kode: newSubjectCode.toUpperCase(),
+        nama: trimmedName,
+        kode: trimmedCode,
         warna: newSubjectGradient
       };
 
@@ -478,18 +720,154 @@ Pisahkan tiap soal dengan baris kosong. Jangan pakai markdown (bold/italic), jan
         id: Date.now(),
         user: currentUser?.name || 'Refky Satria',
         role: activeRole.toUpperCase(),
-        action: `Menambahkan Mata Pelajaran Baru "${newSubjectName}" (${newSubjectCode.toUpperCase()})`,
+        action: `Menambahkan Mata Pelajaran Baru "${trimmedName}" (${trimmedCode})`,
         time: 'Baru saja'
       };
 
-      setAuditLogs([newLog, ...auditLogs]);
-      showToast(`Mata Pelajaran "${newSubjectName}" berhasil ditambahkan!`);
+      setAuditLogs(prev => [newLog, ...prev]);
+      showToast(`Mata Pelajaran "${trimmedName}" berhasil ditambahkan!`);
       setNewSubjectName('');
       setNewSubjectCode('');
       setIsCreateSubjectOpen(false);
     } catch (err) {
-      showToast(err.message || "Gagal menambahkan mata pelajaran");
+      showToast(err.message || "Gagal menambahkan mata pelajaran", 'error');
+    } finally {
+      setIsSavingSubject(false);
     }
+  };
+
+  const handleOpenEditMapel = (mapel) => {
+    setEditingMapel(mapel);
+    setEditMapelCode(mapel.kode || '');
+    setEditMapelName(mapel.nama || '');
+  };
+
+  const handleUpdateMapel = async (e) => {
+    e.preventDefault();
+    if (isUpdatingSubject) return;
+
+    const trimmedName = editMapelName.trim();
+    const trimmedCode = editMapelCode.trim().toUpperCase();
+
+    if (!trimmedName || !trimmedCode) return;
+
+    // Check duplicate excluding current mapel
+    const isDuplicate = dbMapelList.some(
+      m => m.id !== editingMapel?.id && (
+        (m.kode && m.kode.toUpperCase() === trimmedCode) ||
+        (m.nama && m.nama.trim().toLowerCase() === trimmedName.toLowerCase())
+      )
+    );
+
+    if (isDuplicate) {
+      showToast(`Mata pelajaran "${trimmedName}" atau kode "${trimmedCode}" sudah ada di kelas ini!`, 'error');
+      return;
+    }
+
+    setIsUpdatingSubject(true);
+    try {
+      if (isApiClass && routeClassId && editingMapel?.id) {
+        await apiService.updateMapel(routeClassId, editingMapel.id, {
+          kode: trimmedCode,
+          nama: trimmedName,
+        });
+      }
+      setDbMapelList(prev => prev.map(m => m.id === editingMapel.id ? { ...m, kode: trimmedCode, nama: trimmedName } : m));
+      setEditingMapel(null);
+      showToast(`Mata Pelajaran "${trimmedName}" berhasil diperbarui!`);
+    } catch (err) {
+      showToast(err.message || 'Gagal memperbarui mata pelajaran', 'error');
+    } finally {
+      setIsUpdatingSubject(false);
+    }
+  };
+
+  const handleDeleteMapel = (mapelId, mapelNama) => {
+    triggerConfirmModal({
+      title: 'Hapus Mata Pelajaran',
+      description: `Apakah Anda yakin ingin menghapus Mata Pelajaran "${mapelNama}"? Data yang sudah dihapus tidak dapat dikembalikan.`,
+      confirmText: 'Ya, Hapus Mapel',
+      variant: 'danger',
+      onConfirm: async () => {
+        try {
+          if (isApiClass && routeClassId && mapelId) {
+            await apiService.deleteMapel(routeClassId, mapelId);
+          }
+          setDbMapelList(prev => prev.filter(m => m.id !== mapelId));
+          if (editingMapel && String(editingMapel.id) === String(mapelId)) {
+            setEditingMapel(null);
+            setNewSubjectName('');
+            setNewSubjectCode('');
+          }
+          showToast(`Mapel "${mapelNama}" berhasil dihapus!`);
+        } catch (err) {
+          showToast(err.message || 'Gagal menghapus mata pelajaran', 'error');
+        }
+      }
+    });
+  };
+
+  const handleDeleteMateri = (materiId, materiTitle) => {
+    triggerConfirmModal({
+      title: 'Hapus Materi Pembelajaran',
+      description: `Apakah Anda yakin ingin menghapus Materi "${materiTitle}"? Data yang sudah dihapus tidak dapat dikembalikan.`,
+      confirmText: 'Ya, Hapus Materi',
+      variant: 'danger',
+      onConfirm: async () => {
+        try {
+          if (isApiClass && routeClassId && materiId) {
+            await apiService.deleteMateri(routeClassId, materiId);
+          }
+          setDbMateriList(prev => prev.filter(m => m.id !== materiId));
+          if (editingMaterial && String(editingMaterial.id) === String(materiId)) {
+            setEditingMaterial(null);
+            setEditMaterialTitle('');
+            setEditMaterialContent('');
+          }
+          showToast(`Materi "${materiTitle}" berhasil dihapus!`);
+        } catch (err) {
+          showToast(err.message || 'Gagal menghapus materi', 'error');
+        }
+      }
+    });
+  };
+
+  const handleDeleteMateriVersion = (materiObj, versionObj) => {
+    const verNum = Number(versionObj.nomor_versi || versionObj.version || 1);
+    const versiId = versionObj.id;
+
+    triggerConfirmModal({
+      title: `Hapus Versi v${verNum}`,
+      description: `Apakah Anda yakin ingin menghapus Versi v${verNum} dari materi "${materiObj.title || materiObj.judul}"?`,
+      confirmText: 'Ya, Hapus Versi',
+      variant: 'danger',
+      onConfirm: async () => {
+        try {
+          if (isApiClass && routeClassId && versiId) {
+            await apiService.deleteMateriVersion(routeClassId, versiId);
+          }
+
+          setDbMateriList(prev => prev.map(m => {
+            if (m.id === materiObj.id || String(m.id) === String(materiObj.id)) {
+              const filterFn = v => (versiId && v.id ? String(v.id) !== String(versiId) : Number(v.nomor_versi || v.version) !== verNum);
+              const newVersi = (m.versi || []).filter(filterFn);
+              const newVersions = (m.versions || []).filter(filterFn);
+
+              return {
+                ...m,
+                versi: newVersi,
+                versions: newVersions
+              };
+            }
+            return m;
+          }));
+
+          showToast(`Versi v${verNum} berhasil dihapus!`);
+        } catch (err) {
+          showToast(err.message || 'Gagal menghapus versi materi', 'error');
+        }
+      }
+    });
   };
 
   const handleCreateMaterial = async (e) => {
@@ -497,29 +875,38 @@ Pisahkan tiap soal dengan baris kosong. Jangan pakai markdown (bold/italic), jan
     if (!newMaterialTitle.trim() || !newMaterialContent.trim()) return;
 
     const isOwner = activeRole === 'owner';
+    const selectedMapelObj = dbMapelList.find(m => m.kode === newMaterialSubject || String(m.id) === String(newMaterialSubject)) || dbMapelList[0];
+    const cleanKode = selectedMapelObj?.kode || (typeof newMaterialSubject === 'string' && isNaN(Number(newMaterialSubject)) ? newMaterialSubject : 'UMUM');
+    const cleanNama = selectedMapelObj?.nama || cleanKode;
+
     try {
       let createdApi;
       if (isApiClass && routeClassId) {
-        const selectedMapelObj = dbMapelList.find(m => m.kode === newMaterialSubject || m.id === newMaterialSubject);
         createdApi = await apiService.createMateri(routeClassId, {
           judul: newMaterialTitle,
           isi: newMaterialContent,
-          mapel_id: selectedMapelObj?.id || null
+          mapel_id: selectedMapelObj?.id || null,
+          mapel_kode: cleanKode,
+          mapel_nama: cleanNama
         });
       }
 
+      const createdContent = newMaterialContent.trim();
       const materiObject = {
         id: createdApi?.id || `mat-${Date.now()}`,
         classId: routeClassId || activeClass?.id || 'global',
-        subject: newMaterialSubject || 'PWP',
-        subjectName: newMaterialSubject || 'Mata Pelajaran',
+        subject: cleanKode,
+        subjectName: cleanNama,
         title: newMaterialTitle.trim(),
-        content: newMaterialContent.trim(),
+        content: createdContent,
+        contentV1: createdContent,
         num: '01',
         status: isOwner ? 'terverifikasi' : 'menunggu_verifikasi',
         version: 1,
         author: currentUser?.name || 'Owner',
-        createdAt: 'Baru saja'
+        createdAt: 'Baru saja',
+        versions: [{ version: 1, content: createdContent, isi: createdContent, nomor_versi: 1 }],
+        versi: [{ version: 1, content: createdContent, isi: createdContent, nomor_versi: 1 }]
       };
 
       if (addMateri) {
@@ -565,34 +952,115 @@ Pisahkan tiap soal dengan baris kosong. Jangan pakai markdown (bold/italic), jan
     if (!editingMaterial || !editMaterialTitle.trim() || !editMaterialContent.trim()) return;
 
     const isOwner = activeRole === 'owner';
-    const nextVer = (editingMaterial.version || 1) + 1;
+    const originalContent = (editingMaterial.contentV1 || editingMaterial.content || editingMaterial.isi || '').trim();
+    const newContent = editMaterialContent.trim();
+    const isContentChanged = originalContent !== newContent;
+
+    const currentVersionNum = editingMaterial.version || 1;
+    const nextVer = isContentChanged ? currentVersionNum + 1 : currentVersionNum;
     const newStatus = isOwner ? 'terverifikasi' : 'menunggu_verifikasi';
+
+    const selectedMapelObj = dbMapelList.find(m => m.kode === editMaterialSubject || String(m.id) === String(editMaterialSubject));
+    const cleanKode = selectedMapelObj?.kode || (typeof editMaterialSubject === 'string' && isNaN(Number(editMaterialSubject)) ? editMaterialSubject : 'UMUM');
+    const cleanNama = selectedMapelObj?.nama || cleanKode;
 
     try {
       if (isApiClass && routeClassId) {
-        const selectedMapelObj = dbMapelList.find(m => m.kode === editMaterialSubject || m.id === editMaterialSubject);
         await apiService.updateMateri(routeClassId, editingMaterial.id, {
           judul: editMaterialTitle,
           isi: editMaterialContent,
-          mapel_id: selectedMapelObj?.id || null
+          mapel_id: selectedMapelObj?.id || null,
+          mapel_kode: cleanKode,
+          mapel_nama: cleanNama
         });
       }
 
+      const prevVersions = editingMaterial.versions || editingMaterial.versi || [
+        { version: 1, nomor_versi: 1, content: originalContent, isi: originalContent, creator: { name: currentUser?.name || 'Owner' } }
+      ];
+
+      const updatedContentV1 = editingMaterial.contentV1 || originalContent;
+      let newVersions = prevVersions;
+      if (isContentChanged) {
+        const hasV1 = prevVersions.some(v => Number(v.version || v.nomor_versi) === 1);
+        const filtered = prevVersions.filter(v => Number(v.version || v.nomor_versi) !== nextVer);
+        const nextVerObj = {
+          id: 'v' + nextVer + '-' + Date.now(),
+          version: nextVer,
+          nomor_versi: nextVer,
+          content: newContent,
+          isi: newContent,
+          status: newStatus,
+          creator: { name: currentUser?.name || 'Owner' },
+          created_at: new Date().toISOString()
+        };
+        newVersions = [...filtered, nextVerObj];
+        if (!hasV1) {
+          newVersions.unshift({
+            id: 'v1-' + Date.now(),
+            version: 1,
+            nomor_versi: 1,
+            content: updatedContentV1,
+            isi: updatedContentV1,
+            status: 'terverifikasi',
+            creator: { name: currentUser?.name || 'Owner' },
+            created_at: new Date().toISOString()
+          });
+        }
+        newVersions.sort((a, b) => Number(a.nomor_versi || a.version || 0) - Number(b.nomor_versi || b.version || 0));
+      }
+
+      const updatedFields = {
+        title: editMaterialTitle.trim(),
+        subject: cleanKode,
+        subjectName: cleanNama,
+        content: (isOwner || !isContentChanged) ? newContent : editingMaterial.content,
+        version: isOwner && isContentChanged ? nextVer : editingMaterial.version,
+        status: isOwner ? (isContentChanged ? 'terverifikasi' : editingMaterial.status) : editingMaterial.status,
+        contentV1: updatedContentV1,
+        versions: newVersions,
+        versi: newVersions
+      };
+
       setDbMateriList(prev => prev.map(m => {
         if (m.id === editingMaterial.id) {
-          return {
-            ...m,
-            title: editMaterialTitle.trim(),
-            subject: editMaterialSubject,
-            content: isOwner ? editMaterialContent.trim() : m.content,
-            version: isOwner ? nextVer : m.version,
-            status: isOwner ? 'terverifikasi' : m.status,
-          };
+          return { ...m, ...updatedFields };
         }
         return m;
       }));
 
-      if (!isOwner) {
+      if (isApiClass && routeClassId) {
+        apiService.getMateri(routeClassId).then(list => {
+          if (Array.isArray(list)) {
+            setDbMateriList(list.map(m => {
+              const matchedMapel = (dbMapelList || []).find(mp => String(mp.id) === String(m.mapel_id) || mp.kode === m.mapel_id) || m.mapel;
+              const rawKode = m.mapel?.kode || matchedMapel?.kode || (typeof m.mapel_id === 'string' && isNaN(Number(m.mapel_id)) ? m.mapel_id : null);
+              const rawNama = m.mapel?.nama || matchedMapel?.nama;
+              const cleanKodeStr = (rawKode || 'UMUM').toUpperCase();
+              const cleanNamaStr = (rawNama && rawNama !== 'Mata Pelajaran') ? rawNama : (cleanKodeStr !== 'UMUM' ? cleanKodeStr : 'Materi Umum');
+
+              return {
+                id: m.id,
+                subject: cleanKodeStr,
+                subjectName: cleanNamaStr,
+                title: m.judul,
+                content: m.versi_aktif?.isi || m.isi || '',
+                version: m.versi_aktif?.nomor_versi || (m.versi && m.versi.length > 0 ? m.versi[m.versi.length - 1].nomor_versi : 1),
+                status: m.versi_aktif?.status || (m.versi && m.versi.length > 0 ? m.versi[m.versi.length - 1].status : (m.status || 'menunggu_verifikasi')),
+                createdAt: m.created_at ? new Date(m.created_at).toLocaleDateString() : 'Hari ini',
+                author: m.creator?.name || 'Owner',
+                versions: m.versi || []
+              };
+            }));
+          }
+        });
+      }
+
+      if (updateMateriInState) {
+        updateMateriInState(editingMaterial.id, updatedFields);
+      }
+
+      if (!isOwner && isContentChanged) {
         setPendingMaterials(prev => [
           {
             id: editingMaterial.id,
@@ -602,7 +1070,7 @@ Pisahkan tiap soal dengan baris kosong. Jangan pakai markdown (bold/italic), jan
             author: currentUser?.name || 'Admin',
             createdAt: 'Baru saja',
             prevVersion: {
-              version: editingMaterial.version || 1,
+              version: currentVersionNum,
               title: editingMaterial.title,
               content: editingMaterial.content,
               status: 'terverifikasi',
@@ -620,24 +1088,32 @@ Pisahkan tiap soal dengan baris kosong. Jangan pakai markdown (bold/italic), jan
         ]);
       }
 
+      const actionText = isContentChanged
+        ? (isOwner
+          ? `Memperbarui materi "${editMaterialTitle}" ke v${nextVer} (Terverifikasi)`
+          : `Mengajukan pembaruan versi v${nextVer} untuk materi "${editMaterialTitle}" (Menunggu Verifikasi)`)
+        : `Memperbarui informasi materi "${editMaterialTitle}" (Tanpa perubahan versi)`;
+
       const newLog = {
         id: Date.now(),
         user: currentUser?.name || 'Admin',
         role: activeRole.toUpperCase(),
-        action: isOwner
-          ? `Memperbarui materi "${editMaterialTitle}" ke v${nextVer} (Terverifikasi)`
-          : `Mengajukan pembaruan versi v${nextVer} untuk materi "${editMaterialTitle}" (Menunggu Verifikasi)`,
+        action: actionText,
         time: 'Baru saja'
       };
 
       setAuditLogs([newLog, ...auditLogs]);
-      showToast(
-        isOwner
+
+      const toastText = isContentChanged
+        ? (isOwner
           ? `Materi "${editMaterialTitle}" berhasil diperbarui ke v${nextVer}!`
-          : `Versi v${nextVer} materi "${editMaterialTitle}" diajukan! Menunggu Verifikasi Owner.`
-      );
+          : `Versi v${nextVer} materi "${editMaterialTitle}" diajukan! Menunggu Verifikasi Owner.`)
+        : `Informasi materi "${editMaterialTitle}" berhasil diperbarui!`;
+
+      showToast(toastText);
 
       setEditingMaterial(null);
+      setIsCreateMaterialOpen(false);
     } catch (err) {
       showToast(err.message || "Gagal memperbarui materi");
     }
@@ -1040,10 +1516,80 @@ Pisahkan tiap soal dengan baris kosong. Jangan pakai markdown (bold/italic), jan
     handleResetManualForm();
   };
 
+  const handleOpenEditQuiz = (quiz) => {
+    setEditingQuiz(quiz);
+    setNewQuizTitle(quiz.title || '');
+    setNewQuizDesc(quiz.description || '');
+    setNewQuizSubject(quiz.subject || 'PWP');
+    setAcakSoal(Boolean(quiz.acak_soal));
+    setAcakOpsi(Boolean(quiz.acak_opsi));
+    setIsCreateQuizOpen(true);
+  };
+
+  const handleDeleteQuiz = (quizId, quizTitle) => {
+    triggerConfirmModal({
+      title: 'Hapus Quiz',
+      description: `Apakah Anda yakin ingin menghapus Quiz "${quizTitle}"? Data yang sudah dihapus tidak dapat dikembalikan.`,
+      confirmText: 'Ya, Hapus Quiz',
+      variant: 'danger',
+      onConfirm: async () => {
+        try {
+          if (isApiClass && routeClassId && quizId) {
+            await apiService.deleteKuis(routeClassId, quizId);
+          }
+          setDbQuizList(prev => prev.filter(q => q.id !== quizId));
+          if (editingQuiz && String(editingQuiz.id) === String(quizId)) {
+            setEditingQuiz(null);
+            setIsCreateQuizOpen(false);
+            setNewQuizTitle('');
+            setNewQuizDesc('');
+            setAcakSoal(false);
+            setAcakOpsi(false);
+          }
+          showToast(`Quiz "${quizTitle}" berhasil dihapus!`);
+        } catch (err) {
+          showToast(err.message || 'Gagal menghapus quiz', 'error');
+        }
+      }
+    });
+  };
+
   const handleCreateQuiz = async (e) => {
     e.preventDefault();
     if (!newQuizTitle.trim()) {
-      showToast('Judul Kuis harus diisi');
+      showToast('Judul Quiz harus diisi');
+      return;
+    }
+
+    if (editingQuiz) {
+      const selectedMapelObj = dbMapelList.find(m => m.kode === newQuizSubject || String(m.id) === String(newQuizSubject));
+      setIsUpdatingQuiz(true);
+      try {
+        if (isApiClass && routeClassId) {
+          await apiService.updateKuis(routeClassId, editingQuiz.id, {
+            judul: newQuizTitle.trim(),
+            deskripsi: newQuizDesc || '',
+            acak_soal: acakSoal,
+            acak_opsi: acakOpsi
+          });
+        }
+        setDbQuizList(prev => prev.map(q => q.id === editingQuiz.id ? {
+          ...q,
+          title: newQuizTitle.trim(),
+          description: newQuizDesc || '',
+          subject: selectedMapelObj?.kode || newQuizSubject,
+          subjectName: selectedMapelObj?.nama || newQuizSubject,
+          acak_soal: acakSoal,
+          acak_opsi: acakOpsi
+        } : q));
+        showToast(`Quiz "${newQuizTitle}" berhasil diperbarui!`);
+        setEditingQuiz(null);
+        setIsCreateQuizOpen(false);
+      } catch (err) {
+        showToast(err.message || 'Gagal memperbarui quiz', 'error');
+      } finally {
+        setIsUpdatingQuiz(false);
+      }
       return;
     }
 
@@ -1099,24 +1645,38 @@ Pisahkan tiap soal dengan baris kosong. Jangan pakai markdown (bold/italic), jan
       soalPayload = finalManualList;
     }
 
+    setIsSavingQuiz(true);
     try {
+      let createdKuis;
       if (isApiClass && routeClassId) {
-        await apiService.imporSoalBatch(routeClassId, soalPayload);
-        await apiService.createKuis(routeClassId, {
+        const imporRes = await apiService.imporSoalBatch(routeClassId, soalPayload);
+        const createdSoalList = (imporRes && imporRes.data) || [];
+        const soalIds = createdSoalList.map(s => s.id).filter(Boolean);
+        const selectedMapelObj = dbMapelList.find(m => m.kode === newQuizSubject || String(m.id) === String(newQuizSubject));
+        createdKuis = await apiService.createKuis(routeClassId, {
           judul: newQuizTitle,
-          deskripsi: newQuizDesc || 'Kuis Baru'
+          deskripsi: newQuizDesc || 'Kuis Baru',
+          acak_soal: acakSoal,
+          acak_opsi: acakOpsi,
+          soal_ids: soalIds,
+          mapel_id: selectedMapelObj?.id || null
         });
       }
+
+      const selectedMapelObj = dbMapelList.find(m => m.kode === newQuizSubject || String(m.id) === String(newQuizSubject));
       const quizObject = {
-        id: `quiz-${Date.now()}`,
-        classId: routeClassId || activeClass?.id || (classList && classList[0]?.id) || 'global',
+        id: createdKuis?.id || `quiz-${Date.now()}`,
+        classId: routeClassId || activeClass?.id || 'global',
         title: newQuizTitle.trim(),
         description: newQuizDesc || 'Kuis Baru',
         code: newQuizSubject,
-        subject: newQuizSubject,
+        subject: selectedMapelObj?.kode || newQuizSubject,
+        subjectName: selectedMapelObj?.nama || newQuizSubject,
         questionsCount: soalPayload.length,
         attemptsCount: 0,
         active: true,
+        acak_soal: acakSoal,
+        acak_opsi: acakOpsi,
         questions: soalPayload.map(s => ({
           q: s.pertanyaan,
           options: s.opsi.map(o => o.teks_opsi),
@@ -1124,9 +1684,11 @@ Pisahkan tiap soal dengan baris kosong. Jangan pakai markdown (bold/italic), jan
           hint: s.pembahasan || ''
         }))
       };
+
       if (addQuiz) {
         addQuiz(quizObject);
       }
+      setDbQuizList(prev => [quizObject, ...prev]);
 
       const newLog = {
         id: Date.now(),
@@ -1140,19 +1702,41 @@ Pisahkan tiap soal dengan baris kosong. Jangan pakai markdown (bold/italic), jan
       showToast(`Kuis "${newQuizTitle}" berhasil diterbitkan!`);
       setNewQuizTitle('');
       setNewQuizDesc('');
+      setAcakSoal(false);
+      setAcakOpsi(false);
       setRawSoalText('');
       setParsedSoalList([]);
       setManualSoalList([]);
       handleResetManualForm();
-      setActiveTab('overview');
+      setIsCreateQuizOpen(false);
+      setEditingQuiz(null);
     } catch (err) {
       showToast(err.message || 'Gagal menerbitkan kuis');
+    } finally {
+      setIsSavingQuiz(false);
     }
   };
 
   const isOwner = activeRole === 'owner';
   const isAdmin = activeRole === 'admin';
   const canManage = isOwner || isAdmin;
+
+  // Security Protection 0: Role Loading State (Avoid flashing access denied screens)
+  if (isRoleLoading && isApiClass) {
+    return (
+      <div className="min-h-[70vh] flex flex-col items-center justify-center text-center px-4 space-y-4 animate-pulse max-w-md mx-auto py-12">
+        <div className="w-16 h-16 rounded-3xl bg-primary/10 text-primary flex items-center justify-center shadow-inner">
+          <Loader2 className="w-8 h-8 animate-spin" />
+        </div>
+        <div className="space-y-1">
+          <h2 className="text-xl font-extrabold italic text-foreground">Memuat Profil &amp; Hak Akses...</h2>
+          <p className="text-xs text-muted-foreground leading-relaxed">
+            Mohon tunggu sebentar, sedang mengonfirmasi status keanggotaan kelas.
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   // Security Protection 1: Class Not Found / Not Enrolled Check
   if (routeClassId && !activeClass && !isApiClass) {
@@ -1272,18 +1856,24 @@ Pisahkan tiap soal dengan baris kosong. Jangan pakai markdown (bold/italic), jan
 
             {/* Badges Role & Pangkat Level di Sebelah Kanan */}
             <div className="flex flex-wrap items-center gap-1.5 sm:gap-3 pt-1">
-              <span className="px-2 py-0.5 sm:px-3 sm:py-1 rounded-full bg-primary/10 text-primary text-[8px] sm:text-xs font-extrabold uppercase tracking-wider border border-primary/20 shrink-0">
-                ROLE: {activeRole}
-              </span>
+              {isRoleLoading ? (
+                <span className="px-3 py-1 rounded-full bg-muted text-muted-foreground text-[8px] sm:text-xs font-extrabold uppercase tracking-wider animate-pulse border border-border shrink-0">
+                  MEMUAT ROLE...
+                </span>
+              ) : (
+                <span className="px-2 py-0.5 sm:px-3 sm:py-1 rounded-full bg-primary/10 text-primary text-[8px] sm:text-xs font-extrabold uppercase tracking-wider border border-primary/20 shrink-0">
+                  ROLE: {activeRole}
+                </span>
+              )}
               <div className="bg-background border border-border px-2.5 py-1 sm:px-3.5 sm:py-2 rounded-xl sm:rounded-2xl flex items-center gap-2 sm:gap-3 shadow-sm shrink-0">
                 <div>
-                  <p className="text-[7px] sm:text-[9px] font-extrabold uppercase tracking-widest text-muted-foreground leading-none">Pangkat Saat Ini</p>
+                  <p className="text-[7px] sm:text-[9px] font-extrabold uppercase tracking-widest text-muted-foreground leading-none">Peringkat Saat Ini</p>
                   <p className="text-[10px] sm:text-sm font-extrabold italic text-xp-gold mt-0.5">
-                    Lv. {levelInfo.level} {levelInfo.level > 10 ? 'Master' : 'Pemula'}
+                    Lv. {levelInfo.level} {levelInfo.level >= 10 ? 'Master' : levelInfo.level >= 5 ? 'Cendikiawan' : levelInfo.level >= 1 ? 'Pelajar' : 'Pemula'}
                   </p>
                 </div>
                 <div className="w-6 h-6 sm:w-9 sm:h-9 rounded-lg sm:rounded-xl bg-gradient-to-br from-amber-300 via-xp-gold to-amber-500 text-black flex items-center justify-center font-extrabold text-[10px] sm:text-sm shadow-md border border-white/40 shrink-0">
-                  {levelInfo.level}
+                  #{userRank}
                 </div>
               </div>
             </div>
@@ -1344,7 +1934,13 @@ Pisahkan tiap soal dengan baris kosong. Jangan pakai markdown (bold/italic), jan
             </button>
 
             {/* Owner & Admin Management Menu List */}
-            {canManage && (
+            {isRoleLoading ? (
+              <div className="pt-2 border-t border-border space-y-2 animate-pulse px-1">
+                <div className="h-3 w-28 bg-muted rounded my-2"></div>
+                <div className="h-9 w-full bg-muted/60 rounded-xl"></div>
+                <div className="h-9 w-full bg-muted/60 rounded-xl"></div>
+              </div>
+            ) : canManage ? (
               <div className="space-y-1">
                 <button
                   onClick={() => setIsManagementOpen(!isManagementOpen)}
@@ -1405,7 +2001,7 @@ Pisahkan tiap soal dengan baris kosong. Jangan pakai markdown (bold/italic), jan
                       }`}
                     >
                       <Swords className="w-4 h-4 shrink-0" />
-                      <span className="flex-1">Tambah Kuis / Ujian</span>
+                      <span className="flex-1">Quiz</span>
                     </button>
 
                     {isOwner && (
@@ -1455,7 +2051,7 @@ Pisahkan tiap soal dengan baris kosong. Jangan pakai markdown (bold/italic), jan
                   </div>
                 )}
               </div>
-            )}
+            ) : null}
           </div>
         </div>
 
@@ -1471,7 +2067,7 @@ Pisahkan tiap soal dengan baris kosong. Jangan pakai markdown (bold/italic), jan
                 <span className="text-foreground">{activeClass?.name || 'Ruang Kelas'}</span>
                 <ChevronRight className="w-3.5 h-3.5 text-primary" />
                 <span className="text-primary font-extrabold uppercase tracking-wider">
-                  {activeTab === 'add_quiz' && 'Tambah Kuis & Bank Soal'}
+                  {activeTab === 'add_quiz' && 'Quiz & Bank Soal'}
                   {activeTab === 'add_material' && 'Materi Pembelajaran'}
                   {activeTab === 'add_subject' && 'Mata Pelajaran (Mapel)'}
                   {activeTab === 'settings' && 'Edit Informasi & Kode Kelas'}
@@ -1491,7 +2087,7 @@ Pisahkan tiap soal dengan baris kosong. Jangan pakai markdown (bold/italic), jan
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 md:gap-4">
                 <div className="bg-card border border-border rounded-2xl p-4 shadow-sm text-center">
                   <p className="text-2xl font-extrabold italic tabular-nums text-foreground">{displayXp.toLocaleString()}</p>
-                  <p className="text-[10px] font-extrabold text-muted-foreground uppercase tracking-wider mt-1">Total XP</p>
+                  <p className="text-[10px] font-extrabold text-muted-foreground uppercase tracking-wider mt-1">Total XP (Lv. {levelInfo.level})</p>
                 </div>
                 <div className="bg-card border border-border rounded-2xl p-4 shadow-sm text-center">
                   <p className="text-2xl font-extrabold italic tabular-nums text-foreground">{displayExams}</p>
@@ -1507,6 +2103,25 @@ Pisahkan tiap soal dengan baris kosong. Jangan pakai markdown (bold/italic), jan
                   </p>
                   <p className="text-[10px] font-extrabold text-muted-foreground uppercase tracking-wider mt-1">Streak Hari Ini</p>
                 </div>
+              </div>
+
+              {/* Progressive Level XP Bar Widget */}
+              <div className="bg-card border border-border rounded-3xl p-5 shadow-sm space-y-2.5">
+                <div className="flex justify-between items-center text-xs font-extrabold flex-wrap gap-1">
+                  <span className="text-foreground italic flex items-center gap-1.5">
+                    Progress Level {levelInfo.level} → Level {levelInfo.level + 1}
+                  </span>
+                  <span className="text-xp-gold font-mono">{levelInfo.progress} / {levelInfo.max} XP ({levelInfo.percent}%)</span>
+                </div>
+                <div className="h-3 w-full bg-muted rounded-full overflow-hidden p-0.5 border border-border/50">
+                  <div
+                    className="h-full bg-gradient-to-r from-amber-400 via-xp-gold to-amber-500 rounded-full transition-all duration-500 shadow-sm"
+                    style={{ width: `${levelInfo.percent}%` }}
+                  />
+                </div>
+                <p className="text-[11px] text-muted-foreground italic">
+                  Setiap naik level, kebutuhan XP bertambah +50 XP dari level sebelumnya. Butuh <span className="font-bold text-foreground font-mono">{levelInfo.max - levelInfo.progress} XP</span> lagi untuk mencapai Level {levelInfo.level + 1}.
+                </p>
               </div>
 
               {/* Streak Calendar */}
@@ -1730,10 +2345,10 @@ Pisahkan tiap soal dengan baris kosong. Jangan pakai markdown (bold/italic), jan
                 <button
                   type="button"
                   onClick={() => setIsCreateSubjectOpen(!isCreateSubjectOpen)}
-                  className="bg-primary text-primary-foreground font-extrabold px-4 py-2.5 rounded-xl text-xs flex items-center gap-1.5 shadow-sm hover:scale-105 transition-all cursor-pointer"
+                  className="bg-primary text-primary-foreground font-extrabold px-3.5 sm:px-4 py-2.5 rounded-xl text-xs flex items-center gap-1.5 shadow-sm hover:scale-105 transition-all cursor-pointer whitespace-nowrap shrink-0 h-[42px]"
                 >
-                  <Plus className="w-4 h-4" />
-                  <span>{isCreateSubjectOpen ? 'Tutup Form' : 'Tambah Mapel Baru'}</span>
+                  <Plus className="w-4 h-4 shrink-0" />
+                  <span className="whitespace-nowrap">{isCreateSubjectOpen ? 'Tutup Form' : 'Tambah Mapel Baru'}</span>
                 </button>
               </div>
 
@@ -1752,10 +2367,11 @@ Pisahkan tiap soal dengan baris kosong. Jangan pakai markdown (bold/italic), jan
                       <input
                         type="text"
                         required
+                        disabled={isSavingSubject}
                         placeholder="Contoh: Fisika Terapan"
                         value={newSubjectName}
                         onChange={(e) => setNewSubjectName(e.target.value)}
-                        className="w-full bg-background border border-border rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-primary"
+                        className="w-full bg-background border border-border rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-primary disabled:opacity-50"
                       />
                     </div>
 
@@ -1765,10 +2381,11 @@ Pisahkan tiap soal dengan baris kosong. Jangan pakai markdown (bold/italic), jan
                         type="text"
                         required
                         maxLength="5"
+                        disabled={isSavingSubject}
                         placeholder="Contoh: FIS"
                         value={newSubjectCode}
                         onChange={(e) => setNewSubjectCode(e.target.value)}
-                        className="w-full bg-background border border-border rounded-xl px-4 py-2.5 text-sm uppercase font-mono focus:outline-none focus:border-primary"
+                        className="w-full bg-background border border-border rounded-xl px-4 py-2.5 text-sm uppercase font-mono focus:outline-none focus:border-primary disabled:opacity-50"
                       />
                     </div>
                   </div>
@@ -1776,16 +2393,88 @@ Pisahkan tiap soal dengan baris kosong. Jangan pakai markdown (bold/italic), jan
                   <div className="flex justify-end gap-3 pt-2">
                     <button
                       type="button"
+                      disabled={isSavingSubject}
                       onClick={() => setIsCreateSubjectOpen(false)}
-                      className="bg-muted text-muted-foreground font-extrabold px-4 py-2 rounded-xl text-xs hover:bg-muted/80 transition-all cursor-pointer"
+                      className="bg-muted text-muted-foreground font-extrabold px-4 py-2 rounded-xl text-xs hover:bg-muted/80 transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       Batal
                     </button>
                     <button
                       type="submit"
-                      className="bg-primary text-primary-foreground font-extrabold px-6 py-2 rounded-xl text-xs shadow-glow flex items-center gap-1.5 hover:scale-105 transition-all cursor-pointer"
+                      disabled={isSavingSubject}
+                      className="bg-primary text-primary-foreground font-extrabold px-6 py-2 rounded-xl text-xs shadow-glow flex items-center gap-1.5 hover:scale-105 transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
                     >
-                      Simpan Mapel Baru
+                      {isSavingSubject ? (
+                        <>
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                          <span>Menyimpan...</span>
+                        </>
+                      ) : (
+                        <span>Simpan Mapel Baru</span>
+                      )}
+                    </button>
+                  </div>
+                </form>
+              )}
+
+              {/* Form Edit Mapel (Toggleable) */}
+              {editingMapel && (
+                <form onSubmit={handleUpdateMapel} className="bg-card border border-amber-500/40 rounded-3xl p-6 shadow-sm space-y-4 animate-fade-in">
+                  <div className="border-b border-border pb-3 flex items-center justify-between">
+                    <h4 className="font-extrabold text-sm flex items-center gap-2 text-amber-500">
+                      <Pencil className="w-4 h-4" /> Form Edit Mata Pelajaran: {editingMapel.nama}
+                    </h4>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-xs font-bold text-muted-foreground mb-1">Nama Mata Pelajaran</label>
+                      <input
+                        type="text"
+                        required
+                        disabled={isUpdatingSubject}
+                        value={editMapelName}
+                        onChange={(e) => setEditMapelName(e.target.value)}
+                        className="w-full bg-background border border-border rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-primary disabled:opacity-50"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-bold text-muted-foreground mb-1">Singkatan Kode Mapel</label>
+                      <input
+                        type="text"
+                        required
+                        maxLength="5"
+                        disabled={isUpdatingSubject}
+                        value={editMapelCode}
+                        onChange={(e) => setEditMapelCode(e.target.value)}
+                        className="w-full bg-background border border-border rounded-xl px-4 py-2.5 text-sm uppercase font-mono focus:outline-none focus:border-primary disabled:opacity-50"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="flex justify-end gap-3 pt-2">
+                    <button
+                      type="button"
+                      disabled={isUpdatingSubject}
+                      onClick={() => setEditingMapel(null)}
+                      className="bg-muted text-muted-foreground font-extrabold px-4 py-2 rounded-xl text-xs hover:bg-muted/80 transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      Batal
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={isUpdatingSubject}
+                      className="bg-primary text-primary-foreground font-extrabold px-6 py-2 rounded-xl text-xs shadow-glow flex items-center gap-1.5 hover:scale-105 transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
+                    >
+                      {isUpdatingSubject ? (
+                        <>
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                          <span>Memperbarui...</span>
+                        </>
+                      ) : (
+                        <span>Simpan Perubahan Mapel</span>
+                      )}
                     </button>
                   </div>
                 </form>
@@ -1800,26 +2489,66 @@ Pisahkan tiap soal dengan baris kosong. Jangan pakai markdown (bold/italic), jan
                         <th className="pb-3 px-3">Kode Mapel</th>
                         <th className="pb-3 px-3">Nama Mata Pelajaran</th>
                         <th className="pb-3 px-3">Status</th>
+                        <th className="pb-3 px-3 text-right">Aksi</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-border">
-                      {dbMapelList.map((mapel, idx) => (
-                        <tr key={mapel.id || idx} className="hover:bg-muted/30 transition-colors">
-                          <td className="py-3 px-3">
-                            <span className="font-mono font-extrabold bg-primary/10 text-primary px-2.5 py-1 rounded-lg">
-                              {mapel.kode}
-                            </span>
-                          </td>
-                          <td className="py-3 px-3 font-bold text-foreground text-sm">
-                            {mapel.nama}
-                          </td>
-                          <td className="py-3 px-3">
-                            <span className="bg-success/15 text-success font-extrabold text-[10px] px-2.5 py-0.5 rounded-full">
-                              Aktif
-                            </span>
+                      {isLoadingMapel ? (
+                        <tr>
+                          <td colSpan="4" className="py-8 text-center text-muted-foreground">
+                            <div className="flex items-center justify-center gap-2">
+                              <Loader2 className="w-5 h-5 text-primary animate-spin" />
+                              <span className="font-extrabold text-xs">Memuat daftar mata pelajaran...</span>
+                            </div>
                           </td>
                         </tr>
-                      ))}
+                      ) : dbMapelList.length > 0 ? (
+                        dbMapelList.map((mapel, idx) => (
+                          <tr key={mapel.id || idx} className="hover:bg-muted/30 transition-colors">
+                            <td className="py-3 px-3">
+                              <span className="font-mono font-extrabold bg-primary/10 text-primary px-2.5 py-1 rounded-lg">
+                                {mapel.kode}
+                              </span>
+                            </td>
+                            <td className="py-3 px-3 font-bold text-foreground text-sm">
+                              {mapel.nama}
+                            </td>
+                            <td className="py-3 px-3">
+                              <span className="bg-success/15 text-success font-extrabold text-[10px] px-2.5 py-0.5 rounded-full">
+                                Aktif
+                              </span>
+                            </td>
+                            <td className="py-3 px-3 text-right">
+                              <div className="flex items-center justify-end gap-2">
+                                <button
+                                  type="button"
+                                  onClick={() => handleOpenEditMapel(mapel)}
+                                  className="bg-primary/10 hover:bg-primary/20 text-primary font-extrabold px-3 py-1.5 rounded-xl text-xs transition-all cursor-pointer inline-flex items-center gap-1"
+                                  title="Edit Mapel"
+                                >
+                                  <Pencil className="w-3.5 h-3.5" />
+                                  <span>Edit</span>
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleDeleteMapel(mapel.id, mapel.nama)}
+                                  className="bg-muted hover:bg-danger/20 hover:text-danger text-muted-foreground font-extrabold px-3 py-1.5 rounded-xl text-xs transition-all cursor-pointer inline-flex items-center gap-1"
+                                  title="Hapus Mapel"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                  <span>Hapus</span>
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        ))
+                      ) : (
+                        <tr>
+                          <td colSpan="4" className="py-8 text-center text-muted-foreground italic">
+                            Belum ada mata pelajaran di kelas ini.
+                          </td>
+                        </tr>
+                      )}
                     </tbody>
                   </table>
                 </div>
@@ -1831,7 +2560,7 @@ Pisahkan tiap soal dengan baris kosong. Jangan pakai markdown (bold/italic), jan
           {activeTab === 'add_material' && canManage && (
             <div className="space-y-6 animate-fade-in">
               {/* Header Bar Materi */}
-              <div className="bg-card border border-border rounded-3xl p-5 shadow-sm flex items-center justify-between gap-4 flex-wrap">
+              <div className="bg-card border border-border rounded-3xl p-5 shadow-sm space-y-4">
                 <div>
                   <h3 className="font-extrabold text-lg flex items-center gap-2 text-foreground">
                     <FileText className="w-5 h-5 text-primary" /> Daftar Materi Pembelajaran
@@ -1840,107 +2569,159 @@ Pisahkan tiap soal dengan baris kosong. Jangan pakai markdown (bold/italic), jan
                     Kelola materi pembelajaran dan sistem versioning (v1, v2, v3...).
                   </p>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setEditingMaterial(null);
-                    setIsCreateMaterialOpen(!isCreateMaterialOpen);
-                  }}
-                  className="bg-primary text-primary-foreground font-extrabold px-4 py-2.5 rounded-xl text-xs flex items-center gap-1.5 shadow-sm hover:scale-105 transition-all cursor-pointer"
-                >
-                  <Plus className="w-4 h-4" />
-                  <span>{isCreateMaterialOpen ? 'Tutup Form' : 'Tambah Materi Baru'}</span>
-                </button>
-              </div>
 
-              {/* Form Create / Edit Material */}
-              {(isCreateMaterialOpen || editingMaterial) && (
-                <form
-                  onSubmit={editingMaterial ? handleUpdateExistingMaterial : handleCreateMaterial}
-                  className="bg-card border border-border rounded-3xl p-6 shadow-sm space-y-4 animate-fade-in"
-                >
-                  <div className="border-b border-border pb-3 flex items-center justify-between">
-                    <div>
-                      <h4 className="font-extrabold text-sm text-primary flex items-center gap-2">
-                        {editingMaterial ? (
-                          <span className="flex items-center gap-1.5 text-amber-500">
-                            <Pencil className="w-4 h-4" /> Edit Materi: {editingMaterial.title} (Draft Versi v{(editingMaterial.version || 1) + 1})
-                          </span>
-                        ) : (
-                          <span>Form Tambah Materi Pembelajaran (Versi v1)</span>
-                        )}
-                      </h4>
-                      <p className="text-[11px] text-muted-foreground mt-0.5">
-                        {editingMaterial
-                          ? (isOwner ? 'Perubahan akan langsung diterbitkan (v' + ((editingMaterial.version || 1) + 1) + ')' : 'Perubahan akan diajukan ke Owner untuk verifikasi (v' + ((editingMaterial.version || 1) + 1) + ')')
-                          : (isOwner ? 'Materi baru langsung terverifikasi.' : 'Materi baru memerlukan verifikasi Owner.')}
-                      </p>
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-3 border-t border-border/40">
+                  <div className="flex items-center gap-2 sm:gap-3 flex-1 min-w-0">
+                    <div className="relative flex-1 min-w-0">
+                      <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                      <input
+                        type="text"
+                        placeholder="Cari materi..."
+                        value={materialSearchQuery}
+                        onChange={(e) => setMaterialSearchQuery(e.target.value)}
+                        className="w-full pl-10 pr-8 py-2 bg-background border border-border rounded-xl text-xs font-bold text-foreground focus:outline-none focus:border-primary transition-all h-[42px]"
+                      />
+                      {materialSearchQuery && (
+                        <button
+                          onClick={() => setMaterialSearchQuery('')}
+                          className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground hover:text-foreground font-extrabold cursor-pointer"
+                        >
+                          ✕
+                        </button>
+                      )}
                     </div>
-                  </div>
 
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-xs font-bold text-muted-foreground mb-1">Pilih Mata Pelajaran</label>
+                    <div className="relative bg-background border border-border rounded-xl px-3 text-xs font-bold flex items-center h-[42px] shadow-xs shrink-0">
                       <select
-                        value={editingMaterial ? editMaterialSubject : newMaterialSubject}
-                        onChange={(e) => editingMaterial ? setEditMaterialSubject(e.target.value) : setNewMaterialSubject(e.target.value)}
-                        className="w-full bg-background text-foreground border border-border rounded-xl px-3.5 py-2.5 text-xs sm:text-sm focus:outline-none focus:border-primary cursor-pointer shadow-sm"
+                        value={selectedMaterialMapelFilter}
+                        onChange={(e) => setSelectedMaterialMapelFilter(e.target.value)}
+                        className="bg-transparent appearance-none text-foreground font-bold text-xs focus:outline-none cursor-pointer pr-6 truncate"
                       >
+                        <option value="ALL" className="bg-card text-foreground font-normal text-xs">Semua Mapel</option>
                         {dbMapelList.map(m => (
-                          <option key={m.id || m.kode} value={m.kode} className="bg-card text-foreground font-medium text-xs py-1">
+                          <option key={m.id || m.kode} value={m.kode} className="bg-card text-foreground font-normal text-xs">
                             {m.kode} - {m.nama}
                           </option>
                         ))}
                       </select>
+                      <ChevronDown className="w-3.5 h-3.5 text-muted-foreground pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2" />
+                    </div>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEditingMaterial(null);
+                      setIsCreateMaterialOpen(!isCreateMaterialOpen);
+                    }}
+                    className="bg-primary text-primary-foreground font-extrabold px-4 py-2.5 rounded-xl text-xs flex items-center justify-center gap-1.5 shadow-sm hover:scale-105 transition-all cursor-pointer whitespace-nowrap shrink-0 h-[42px] sm:w-auto w-full"
+                  >
+                    <Plus className="w-4 h-4 shrink-0" />
+                    <span className="whitespace-nowrap">{isCreateMaterialOpen ? 'Tutup Form' : 'Tambah Materi Baru'}</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Form Create / Edit Material */}
+              {(isCreateMaterialOpen || editingMaterial) && (() => {
+                const isContentChanged = editingMaterial && editMaterialContent.trim() !== (editingMaterial.content || editingMaterial.isi || '').trim();
+                const nextVer = editingMaterial ? ((editingMaterial.version || 1) + 1) : 1;
+
+                return (
+                  <form
+                    onSubmit={editingMaterial ? handleUpdateExistingMaterial : handleCreateMaterial}
+                    className="bg-card border border-border rounded-3xl p-6 shadow-sm space-y-4 animate-fade-in"
+                  >
+                    <div className="border-b border-border pb-3 flex items-center justify-between">
+                      <div>
+                        <h4 className="font-extrabold text-sm text-primary flex items-center gap-2">
+                          {editingMaterial ? (
+                            <span className="flex items-center gap-1.5 text-amber-500">
+                              <Pencil className="w-4 h-4" /> Edit Materi: {editingMaterial.title} {isContentChanged ? `(Versi Baru v${nextVer})` : `(v${editingMaterial.version || 1})`}
+                            </span>
+                          ) : (
+                            <span>Form Tambah Materi Pembelajaran (Versi v1)</span>
+                          )}
+                        </h4>
+                        <p className="text-[11px] text-muted-foreground mt-0.5">
+                          {editingMaterial
+                            ? (isContentChanged
+                              ? (isOwner ? `Perubahan isi akan langsung diterbitkan (v${nextVer})` : `Perubahan isi akan diajukan ke Owner untuk verifikasi (v${nextVer})`)
+                              : 'Perubahan mata pelajaran & judul akan disimpan tanpa mengubah versi.')
+                            : (isOwner ? 'Materi baru langsung terverifikasi.' : 'Materi baru memerlukan verifikasi Owner.')}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-xs font-bold text-muted-foreground mb-1">Pilih Mata Pelajaran</label>
+                        <div className="relative">
+                          <select
+                            value={editingMaterial ? editMaterialSubject : newMaterialSubject}
+                            onChange={(e) => editingMaterial ? setEditMaterialSubject(e.target.value) : setNewMaterialSubject(e.target.value)}
+                            className="w-full appearance-none bg-background text-foreground border border-border rounded-xl pl-4 pr-10 py-2.5 text-xs sm:text-sm focus:outline-none focus:border-primary cursor-pointer shadow-sm"
+                          >
+                            {dbMapelList.map(m => (
+                              <option key={m.id || m.kode} value={m.id || m.kode} className="bg-card text-foreground font-medium text-xs py-1">
+                                {m.kode} - {m.nama}
+                              </option>
+                            ))}
+                          </select>
+                          <ChevronDown className="w-4 h-4 text-muted-foreground pointer-events-none absolute right-3.5 top-1/2 -translate-y-1/2" />
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="block text-xs font-bold text-muted-foreground mb-1">Judul Bab Materi</label>
+                        <input
+                          type="text"
+                          required
+                          placeholder="Contoh: Arsitektur MVC pada Framework Laravel"
+                          value={editingMaterial ? editMaterialTitle : newMaterialTitle}
+                          onChange={(e) => editingMaterial ? setEditMaterialTitle(e.target.value) : setNewMaterialTitle(e.target.value)}
+                          className="w-full bg-background border border-border rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-primary"
+                        />
+                      </div>
                     </div>
 
                     <div>
-                      <label className="block text-xs font-bold text-muted-foreground mb-1">Judul Bab Materi</label>
-                      <input
-                        type="text"
+                      <label className="block text-xs font-bold text-muted-foreground mb-1">Isi Rangkuman / Poin Materi</label>
+                      <textarea
+                        rows={5}
                         required
-                        placeholder="Contoh: Arsitektur MVC pada Framework Laravel"
-                        value={editingMaterial ? editMaterialTitle : newMaterialTitle}
-                        onChange={(e) => editingMaterial ? setEditMaterialTitle(e.target.value) : setNewMaterialTitle(e.target.value)}
-                        className="w-full bg-background border border-border rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-primary"
+                        placeholder="Tuliskan rangkuman poin-poin materi di sini..."
+                        value={editingMaterial ? editMaterialContent : newMaterialContent}
+                        onChange={(e) => editingMaterial ? setEditMaterialContent(e.target.value) : setNewMaterialContent(e.target.value)}
+                        className="w-full bg-background border border-border rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-primary resize-none"
                       />
                     </div>
-                  </div>
 
-                  <div>
-                    <label className="block text-xs font-bold text-muted-foreground mb-1">Isi Rangkuman / Poin Materi</label>
-                    <textarea
-                      rows={5}
-                      required
-                      placeholder="Tuliskan rangkuman poin-poin materi di sini..."
-                      value={editingMaterial ? editMaterialContent : newMaterialContent}
-                      onChange={(e) => editingMaterial ? setEditMaterialContent(e.target.value) : setNewMaterialContent(e.target.value)}
-                      className="w-full bg-background border border-border rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-primary resize-none"
-                    />
-                  </div>
-
-                  <div className="flex justify-end gap-3 pt-2">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setIsCreateMaterialOpen(false);
-                        setEditingMaterial(null);
-                      }}
-                      className="bg-muted text-muted-foreground font-extrabold px-4 py-2 rounded-xl text-xs hover:bg-muted/80 transition-all cursor-pointer"
-                    >
-                      Batal
-                    </button>
-                    <button
-                      type="submit"
-                      className="bg-primary text-primary-foreground font-extrabold px-6 py-2.5 rounded-xl text-xs shadow-glow flex items-center gap-1.5 hover:scale-105 transition-all cursor-pointer"
-                    >
-                      {editingMaterial
-                        ? (isOwner ? `Simpan & Terbitkan v${(editingMaterial.version || 1) + 1}` : `Ajukan Pembaruan v${(editingMaterial.version || 1) + 1}`)
-                        : (isOwner ? 'Publikasikan (Terverifikasi)' : 'Ajukan (Menunggu Verifikasi)')}
-                    </button>
-                  </div>
-                </form>
-              )}
+                    <div className="flex justify-end gap-3 pt-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsCreateMaterialOpen(false);
+                          setEditingMaterial(null);
+                        }}
+                        className="bg-muted text-muted-foreground font-extrabold px-4 py-2 rounded-xl text-xs hover:bg-muted/80 transition-all cursor-pointer"
+                      >
+                        Batal
+                      </button>
+                      <button
+                        type="submit"
+                        className="bg-primary text-primary-foreground font-extrabold px-6 py-2.5 rounded-xl text-xs shadow-glow flex items-center gap-1.5 hover:scale-105 transition-all cursor-pointer"
+                      >
+                        {editingMaterial
+                          ? (isContentChanged
+                            ? (isOwner ? `Simpan & Terbitkan v${nextVer}` : `Ajukan Pembaruan v${nextVer}`)
+                            : 'Simpan Perubahan')
+                          : (isOwner ? 'Publikasikan (Terverifikasi)' : 'Ajukan (Menunggu Verifikasi)')}
+                      </button>
+                    </div>
+                  </form>
+                );
+              })()}
 
               {/* Tabel Daftar Materi */}
               <div className="bg-card border border-border rounded-3xl p-6 shadow-sm space-y-4">
@@ -1956,8 +2737,17 @@ Pisahkan tiap soal dengan baris kosong. Jangan pakai markdown (bold/italic), jan
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-border">
-                      {dbMateriList.length > 0 ? (
-                        dbMateriList.map((materi, idx) => (
+                      {isLoadingMateri ? (
+                        <tr>
+                          <td colSpan="5" className="py-8 text-center text-muted-foreground">
+                            <div className="flex items-center justify-center gap-2">
+                              <Loader2 className="w-5 h-5 text-primary animate-spin" />
+                              <span className="font-extrabold text-xs">Memuat daftar materi pembelajaran...</span>
+                            </div>
+                          </td>
+                        </tr>
+                      ) : filteredMateriList.length > 0 ? (
+                        filteredMateriList.map((materi, idx) => (
                           <tr key={materi.id || idx} className="hover:bg-muted/30 transition-colors">
                             <td className="py-3 px-3">
                               <span className="font-mono font-extrabold bg-primary/10 text-primary px-2 py-0.5 rounded-md text-[11px]">
@@ -1969,14 +2759,29 @@ Pisahkan tiap soal dengan baris kosong. Jangan pakai markdown (bold/italic), jan
                               <p className="text-[11px] text-muted-foreground line-clamp-1">{materi.content}</p>
                             </td>
                             <td className="py-3 px-3">
-                              <span className="bg-muted text-foreground font-extrabold font-mono text-[10px] px-2 py-0.5 rounded-full border border-border">
-                                v{materi.version || 1}
-                              </span>
+                              <MaterialVersionDropdown
+                                versions={
+                                  (materi.versi && materi.versi.length > 0)
+                                    ? materi.versi
+                                    : ((materi.versions && materi.versions.length > 0)
+                                      ? materi.versions
+                                      : [{ version: materi.version || 1, nomor_versi: materi.version || 1, content: materi.content, isi: materi.content, status: materi.status }])
+                                }
+                                activeVersion={materi.version || 1}
+                                activeVersionId={materi.versi_aktif_id}
+                                onSelectVersion={() => {}}
+                                onDeleteVersion={(vObj) => handleDeleteMateriVersion(materi, vObj)}
+                                isOwner={activeRole === 'owner'}
+                              />
                             </td>
                             <td className="py-3 px-3">
                               {materi.status === 'terverifikasi' || materi.status === 'verified' ? (
                                 <span className="bg-success/15 text-success font-extrabold text-[10px] px-2.5 py-0.5 rounded-full flex items-center gap-1 w-fit">
                                   <CheckCircle2 className="w-3 h-3" /> Terverifikasi
+                                </span>
+                              ) : materi.status === 'ditolak' || materi.status === 'rejected' ? (
+                                <span className="bg-danger/15 text-danger font-extrabold text-[10px] px-2.5 py-0.5 rounded-full flex items-center gap-1 w-fit">
+                                  <XCircle className="w-3 h-3" /> Ditolak
                                 </span>
                               ) : (
                                 <span className="bg-warning/20 text-warning font-extrabold text-[10px] px-2.5 py-0.5 rounded-full flex items-center gap-1 w-fit">
@@ -1985,18 +2790,35 @@ Pisahkan tiap soal dengan baris kosong. Jangan pakai markdown (bold/italic), jan
                               )}
                             </td>
                             <td className="py-3 px-3 text-right">
-                              <button
-                                type="button"
-                                onClick={() => handleOpenEditMaterial(materi)}
-                                className="bg-primary/10 hover:bg-primary/20 text-primary font-extrabold px-3 py-1.5 rounded-xl text-xs transition-all cursor-pointer inline-flex items-center gap-1"
-                                title="Edit & Ciptakan Versi Baru"
-                              >
-                                <Pencil className="w-3.5 h-3.5" />
-                                <span>Edit (v{(materi.version || 1) + 1})</span>
-                              </button>
+                              <div className="flex items-center justify-end gap-2">
+                                <button
+                                  type="button"
+                                  onClick={() => handleOpenEditMaterial(materi)}
+                                  className="bg-primary/10 hover:bg-primary/20 text-primary font-extrabold px-3 py-1.5 rounded-xl text-xs transition-all cursor-pointer inline-flex items-center gap-1"
+                                  title="Edit Materi"
+                                >
+                                  <Pencil className="w-3.5 h-3.5" />
+                                  <span>Edit</span>
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleDeleteMateri(materi.id, materi.title)}
+                                  className="bg-muted hover:bg-danger/20 hover:text-danger text-muted-foreground font-extrabold px-3 py-1.5 rounded-xl text-xs transition-all cursor-pointer inline-flex items-center gap-1"
+                                  title="Hapus Materi"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                  <span>Hapus</span>
+                                </button>
+                              </div>
                             </td>
                           </tr>
                         ))
+                      ) : dbMateriList.length > 0 && filteredMateriList.length === 0 ? (
+                        <tr>
+                          <td colSpan="5" className="py-8 text-center text-muted-foreground italic">
+                            Tidak ada materi pembelajaran untuk mata pelajaran "{selectedMaterialMapelFilter}".
+                          </td>
+                        </tr>
                       ) : (
                         <tr>
                           <td colSpan="5" className="py-6 text-center text-muted-foreground italic">
@@ -2011,737 +2833,952 @@ Pisahkan tiap soal dengan baris kosong. Jangan pakai markdown (bold/italic), jan
             </div>
           )}
 
-          {/* VIEW 5: FORM TAMBAH KUIS & BANK SOAL BARU */}
+          {/* VIEW 5: DAFTAR QUIZ & BANK SOAL */}
           {activeTab === 'add_quiz' && canManage && (
-            <div className="bg-card border border-border rounded-3xl p-6 shadow-sm space-y-6 animate-fade-in">
-              <div className="border-b border-border pb-4 flex items-center justify-between gap-4 flex-wrap">
+            <div className="space-y-6 animate-fade-in">
+              {/* Header Bar Quiz */}
+              <div className="bg-card border border-border rounded-3xl p-5 shadow-sm space-y-4">
                 <div>
-                  <h3 className="font-extrabold text-lg flex items-center gap-2">
-                    <Swords className="w-5 h-5 text-primary" /> Form Tambah Kuis &amp; Bank Soal
+                  <h3 className="font-extrabold text-lg flex items-center gap-2 text-foreground">
+                    <Swords className="w-5 h-5 text-primary" /> Daftar Quiz &amp; Bank Soal
                   </h3>
-                  <p className="text-xs text-muted-foreground mt-1">Terbitkan kuis baru dan impor soal ke Bank Soal kelas.</p>
-                </div>
-                <div className="flex items-center gap-1.5 bg-muted p-1 rounded-2xl border border-border">
-                  <button
-                    type="button"
-                    onClick={() => setQuizInputMode('manual')}
-                    className={`px-3.5 py-1.5 rounded-xl text-xs font-extrabold flex items-center gap-1.5 transition-all cursor-pointer ${
-                      quizInputMode === 'manual' ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
-                    }`}
-                  >
-                    <FileText className="w-3.5 h-3.5" /> Input Manual
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setQuizInputMode('paste')}
-                    className={`px-3.5 py-1.5 rounded-xl text-xs font-extrabold flex items-center gap-1.5 transition-all cursor-pointer ${
-                      quizInputMode === 'paste' ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
-                    }`}
-                  >
-                    Tempel Teks (AI)
-                  </button>
-                </div>
-              </div>
-
-              <form onSubmit={handleCreateQuiz} className="space-y-5">
-                {/* General Quiz Information */}
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 bg-background p-4 rounded-2xl border border-border">
-                  <div>
-                    <label className="block text-xs font-bold text-muted-foreground mb-1">Judul Kuis / Ujian</label>
-                    <input
-                      type="text"
-                      required
-                      placeholder="Contoh: Ulangan Harian Negosiasi"
-                      value={newQuizTitle}
-                      onChange={(e) => setNewQuizTitle(e.target.value)}
-                      className="w-full bg-card border border-border rounded-xl px-4 py-2 text-sm focus:outline-none focus:border-primary"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-bold text-muted-foreground mb-1">Mata Pelajaran</label>
-                    <select
-                      value={newQuizSubject}
-                      onChange={(e) => setNewQuizSubject(e.target.value)}
-                      className="w-full bg-card border border-border rounded-xl px-4 py-2 text-sm focus:outline-none focus:border-primary cursor-pointer"
-                    >
-                      {dbMapelList.map(m => (
-                        <option key={m.id || m.kode} value={m.kode}>
-                          {m.kode} - {m.nama}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-xs font-bold text-muted-foreground mb-1">Deskripsi / Petunjuk (Opsional)</label>
-                    <input
-                      type="text"
-                      placeholder="Contoh: Kerjakan dengan jujur, 10 soal."
-                      value={newQuizDesc}
-                      onChange={(e) => setNewQuizDesc(e.target.value)}
-                      className="w-full bg-card border border-border rounded-xl px-4 py-2 text-sm focus:outline-none focus:border-primary"
-                    />
-                  </div>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Kelola daftar quiz, buat bank soal manual, atau impor batch dari AI.
+                  </p>
                 </div>
 
-                {/* MODE 1: TEMPEL TEKS AI */}
-                {quizInputMode === 'paste' && (
-                  <div className="space-y-4">
-                    {/* Prompt Template Box for AI */}
-                    <div className="p-4 bg-primary/10 border border-primary/20 rounded-2xl space-y-2.5">
-                      <div className="flex items-center justify-between gap-2 flex-wrap">
-                        <div className="flex items-center gap-2 text-primary font-extrabold text-xs">
-                          Belum punya soal? Salin prompt ini untuk AI
-                        </div>
-                        <button
-                          type="button"
-                          onClick={handleCopyPrompt}
-                          className="bg-primary text-primary-foreground font-extrabold px-3 py-1.5 rounded-xl text-xs flex items-center gap-1.5 hover:scale-105 transition-all cursor-pointer shadow-xs"
-                        >
-                          {copiedPrompt ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
-                          {copiedPrompt ? 'Tersalin!' : 'Salin Prompt'}
-                        </button>
-                      </div>
-                      <textarea
-                        readOnly
-                        rows={9}
-                        value={PROMPT_TEMPLATE}
-                        className="w-full text-xs font-mono bg-card/70 p-3 rounded-xl border border-border text-foreground leading-relaxed focus:outline-none resize-none"
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-3 border-t border-border/40">
+                  <div className="flex items-center gap-2 sm:gap-3 flex-1 min-w-0">
+                    <div className="relative flex-1 min-w-0">
+                      <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                      <input
+                        type="text"
+                        placeholder="Cari quiz..."
+                        value={quizSearchQuery}
+                        onChange={(e) => setQuizSearchQuery(e.target.value)}
+                        className="w-full pl-10 pr-8 py-2 bg-background border border-border rounded-xl text-xs font-bold text-foreground focus:outline-none focus:border-primary transition-all h-[42px]"
                       />
-                      <p className="text-[11px] text-muted-foreground font-medium">
-                        💡 <span className="font-bold text-foreground">Tips:</span> Ganti <code className="bg-muted px-1.5 py-0.5 rounded text-primary font-mono font-bold">[jumlah]</code> dan <code className="bg-muted px-1.5 py-0.5 rounded text-primary font-mono font-bold">[topik]</code> sebelum dikirim ke ChatGPT / Claude.
-                      </p>
-                    </div>
-
-                    <div>
-                      <label className="block text-xs font-bold text-muted-foreground mb-1">Tempelkan Teks Hasil Generate AI (ChatGPT / Claude)</label>
-                      <textarea
-                        rows={7}
-                        placeholder="Paste teks daftar soal di sini..."
-                        value={rawSoalText}
-                        onChange={(e) => setRawSoalText(e.target.value)}
-                        className="w-full bg-background border border-border rounded-xl p-3.5 text-xs font-mono focus:outline-none focus:border-primary resize-y"
-                      />
-                    </div>
-
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <button
-                        type="button"
-                        onClick={() => handleParseSoal(true)}
-                        disabled={isParsingSoal || !rawSoalText.trim()}
-                        className="bg-primary text-primary-foreground font-extrabold px-5 py-2.5 rounded-xl text-xs flex items-center gap-2 hover:scale-105 transition-all disabled:opacity-50 cursor-pointer shadow-sm"
-                      >
-                        <Plus className="w-4 h-4" />
-                        {isParsingSoal
-                          ? 'Memproses Parsing...'
-                          : (parsedSoalList.length > 0
-                              ? `+ Parse & Tambah ke Daftar (Soal #${parsedSoalList.length + 1} dst.)`
-                              : 'Parse Teks Soal')}
-                      </button>
-
-                      {parsedSoalList.length > 0 && (
+                      {quizSearchQuery && (
                         <button
-                          type="button"
-                          onClick={() => {
-                            setParsedSoalList([]);
-                            setEditingSoalId(null);
-                            showToast('Daftar preview soal dibersihkan');
-                          }}
-                          className="bg-muted text-muted-foreground font-extrabold px-4 py-2.5 rounded-xl text-xs hover:bg-danger/10 hover:text-danger transition-all cursor-pointer"
+                          onClick={() => setQuizSearchQuery('')}
+                          className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground hover:text-foreground font-extrabold cursor-pointer"
                         >
-                          Reset / Bersihkan Preview
+                          ✕
                         </button>
                       )}
                     </div>
 
-                    {/* Preview List Soal Hasil Parsing */}
-                    {parsedSoalList.length > 0 && (
-                      <div className="space-y-3 pt-3 border-t border-border">
-                        <div className="flex items-center justify-between">
-                          <h4 className="font-extrabold text-sm flex items-center gap-2">
-                            Preview Soal ({parsedSoalList.filter(s => s.status === 'valid').length} Valid, {parsedSoalList.filter(s => s.status === 'error').length} Error)
-                          </h4>
-                        </div>
+                    <div className="bg-background border border-border rounded-xl px-3 text-xs font-bold flex items-center h-[42px] shadow-xs shrink-0">
+                      <select
+                        value={selectedQuizMapelFilter}
+                        onChange={(e) => setSelectedQuizMapelFilter(e.target.value)}
+                        className="bg-transparent text-foreground font-bold text-xs focus:outline-none cursor-pointer pr-1 truncate"
+                      >
+                        <option value="ALL" className="bg-card text-foreground font-normal text-xs">Semua Mapel</option>
+                        {dbMapelList.map(m => (
+                          <option key={m.id || m.kode} value={m.kode} className="bg-card text-foreground font-normal text-xs">
+                            {m.kode} - {m.nama}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
 
-                        <div className="space-y-3 max-h-96 overflow-y-auto pr-1">
-                          {parsedSoalList.map((item, index) => (
-                            <div
-                              key={item.id || index}
-                              className={`p-4 rounded-2xl border text-xs space-y-2 transition-all ${
-                                item.status === 'valid'
-                                  ? 'bg-card border-success/30'
-                                  : 'bg-danger/10 border-danger/40'
-                              }`}
-                            >
-                              <div className="flex items-start justify-between gap-2">
-                                <div className="flex items-center gap-2 flex-wrap">
-                                  <span className="font-extrabold text-foreground">Soal #{index + 1}</span>
-                                  {item.status === 'valid' ? (
-                                    <span className="bg-success/20 text-success font-extrabold text-[10px] px-2 py-0.5 rounded-full flex items-center gap-1">
-                                      <CheckCircle2 className="w-3 h-3" /> Valid
-                                    </span>
-                                  ) : (
-                                    <span className="bg-danger text-white font-extrabold text-[10px] px-2 py-0.5 rounded-full flex items-center gap-1">
-                                      <AlertCircle className="w-3 h-3" /> Error: {item.error_message}
-                                    </span>
-                                  )}
-                                </div>
-                                <div className="flex items-center gap-1">
-                                  <button
-                                    type="button"
-                                    onClick={() => handleStartEditParsedSoal(item)}
-                                    className="text-muted-foreground hover:text-primary p-1.5 rounded-lg transition-colors cursor-pointer"
-                                    title="Edit Soal Ini"
-                                  >
-                                    <Pencil className="w-4 h-4" />
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={() => handleRemoveParsedSoal(item.id)}
-                                    className="text-muted-foreground hover:text-danger p-1.5 rounded-lg transition-colors cursor-pointer"
-                                    title="Hapus Soal dari Preview"
-                                  >
-                                    <Trash2 className="w-4 h-4" />
-                                  </button>
-                                </div>
-                              </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (isCreateQuizOpen || editingQuiz) {
+                        setIsCreateQuizOpen(false);
+                        setEditingQuiz(null);
+                      } else {
+                        setEditingQuiz(null);
+                        setNewQuizTitle('');
+                        setNewQuizDesc('');
+                        setRawSoalText('');
+                        setParsedSoalList([]);
+                        setManualSoalList([]);
+                        handleResetManualForm();
+                        setIsCreateQuizOpen(true);
+                      }
+                    }}
+                    className="bg-primary text-primary-foreground font-extrabold px-4 py-2.5 rounded-xl text-xs flex items-center justify-center gap-1.5 shadow-sm hover:scale-105 transition-all cursor-pointer whitespace-nowrap shrink-0 h-[42px] sm:w-auto w-full"
+                  >
+                    <Plus className="w-4 h-4 shrink-0" />
+                    <span className="whitespace-nowrap">{(isCreateQuizOpen || editingQuiz) ? 'Tutup Form' : 'Tambah Quiz Baru'}</span>
+                  </button>
+                </div>
+              </div>
 
-                              {editingSoalId === item.id ? (
-                                <div className="space-y-3 pt-2 bg-background/80 p-4 rounded-xl border border-primary/40 text-left">
-                                  <div className="space-y-1">
-                                    <label className="block text-[11px] font-bold text-muted-foreground">Pertanyaan Soal #{index + 1}</label>
-                                    <textarea
-                                      rows={2}
-                                      value={editPertanyaan}
-                                      onChange={(e) => setEditPertanyaan(e.target.value)}
-                                      className="w-full bg-card border border-border rounded-xl p-2.5 text-xs focus:outline-none focus:border-primary text-foreground font-semibold resize-y"
-                                      placeholder="Tuliskan pertanyaan..."
-                                    />
-                                  </div>
-
-                                  <div className="space-y-2">
-                                    <div className="flex items-center justify-between flex-wrap gap-2">
-                                      <label className="block text-[11px] font-bold text-muted-foreground flex items-center gap-1.5">
-                                        Opsi Pilihan Ganda ({editOpsi.length} Opsi)
-                                        {!editJawabanHuruf && (
-                                          <span className="text-[10px] font-extrabold text-danger bg-danger/10 px-2 py-0.5 rounded-full flex items-center gap-1">
-                                            <AlertCircle className="w-3 h-3" /> Jawaban belum dipilih
-                                          </span>
-                                        )}
-                                      </label>
-                                      <div className="flex items-center gap-2">
-                                        {(editOpsi || []).length > 2 && (
-                                          <button
-                                            type="button"
-                                            onClick={handleRemoveEditOption}
-                                            className="text-xs font-extrabold text-danger bg-danger/10 hover:bg-danger/20 px-2.5 py-1 rounded-lg transition-all cursor-pointer flex items-center gap-1"
-                                            title={`Hapus Opsi Terakhir (${editOpsi[editOpsi.length - 1]?.huruf || String.fromCharCode(64 + editOpsi.length)})`}
-                                          >
-                                            <Trash2 className="w-3 h-3" /> Hapus Opsi {editOpsi[editOpsi.length - 1]?.huruf || String.fromCharCode(64 + editOpsi.length)}
-                                          </button>
-                                        )}
-                                        {(editOpsi || []).length < 5 && (
-                                          <button
-                                            type="button"
-                                            onClick={handleAddEditOption}
-                                            className="text-xs font-extrabold text-primary bg-primary/10 hover:bg-primary/20 px-2.5 py-1 rounded-lg transition-all cursor-pointer flex items-center gap-1"
-                                            title="Tambah Opsi Berikutnya"
-                                          >
-                                            <Plus className="w-3 h-3" /> Tambah Opsi {String.fromCharCode(65 + editOpsi.length)}
-                                          </button>
-                                        )}
-                                      </div>
-                                    </div>
-
-                                    <div className="space-y-2">
-                                      {(editOpsi || []).map((opt, oIdx) => {
-                                        const huruf = opt.huruf || String.fromCharCode(65 + oIdx);
-                                        const isCorrect = editJawabanHuruf === huruf;
-                                        const isLast = oIdx === editOpsi.length - 1;
-                                        return (
-                                          <div key={oIdx} className="flex items-center gap-2">
-                                            <button
-                                              type="button"
-                                              onClick={() => setEditJawabanHuruf(huruf)}
-                                              className={`w-7 h-7 rounded-lg text-xs font-extrabold flex items-center justify-center shrink-0 border transition-all cursor-pointer ${
-                                                isCorrect
-                                                  ? 'bg-success text-white border-success shadow-xs'
-                                                  : 'bg-muted text-muted-foreground border-border hover:border-primary/40'
-                                              }`}
-                                              title={isCorrect ? 'Kunci Jawaban Benar' : 'Klik untuk jadikan Kunci Jawaban'}
-                                            >
-                                              {huruf}
-                                            </button>
-                                            <input
-                                              type="text"
-                                              value={opt.teks_opsi || ''}
-                                              onChange={(e) => {
-                                                const val = e.target.value;
-                                                setEditOpsi(prev => (prev || []).map((o, i) => i === oIdx ? { ...o, teks_opsi: val } : o));
-                                              }}
-                                              placeholder={`Pilihan ${huruf}...`}
-                                              className={`flex-1 bg-card border rounded-xl px-3 py-1.5 text-xs focus:outline-none focus:border-primary ${
-                                                isCorrect ? 'border-success/60 text-success font-bold bg-success/5' : 'border-border text-foreground'
-                                              }`}
-                                            />
-                                            {isCorrect && (
-                                              <span className="text-[10px] font-extrabold text-success bg-success/15 px-2 py-0.5 rounded-full shrink-0">
-                                                Kunci
-                                              </span>
-                                            )}
-                                            {isLast && (editOpsi || []).length > 2 && (
-                                              <button
-                                                type="button"
-                                                onClick={handleRemoveEditOption}
-                                                className="text-muted-foreground hover:text-danger p-1 rounded-lg shrink-0 cursor-pointer"
-                                                title={`Hapus Opsi ${huruf}`}
-                                              >
-                                                <X className="w-3.5 h-3.5" />
-                                              </button>
-                                            )}
-                                          </div>
-                                        );
-                                      })}
-                                    </div>
-                                  </div>
-
-                                  <div className="space-y-1">
-                                    <label className="block text-[11px] font-bold text-muted-foreground">Pilih Jawaban Benar (Menyesuaikan {editOpsi.length} Opsi)</label>
-                                    <select
-                                      value={editJawabanHuruf}
-                                      onChange={(e) => setEditJawabanHuruf(e.target.value)}
-                                      className="w-full bg-card border border-border rounded-xl px-3 py-1.5 text-xs focus:outline-none focus:border-primary text-foreground font-extrabold cursor-pointer"
-                                    >
-                                      <option value="" disabled>-- Pilih Jawaban Benar --</option>
-                                      {(editOpsi || []).map((o, i) => {
-                                        const h = o.huruf || String.fromCharCode(65 + i);
-                                        return (
-                                          <option key={h} value={h}>Opsi {h}</option>
-                                        );
-                                      })}
-                                    </select>
-                                  </div>
-
-                                  <div className="space-y-1">
-                                    <label className="block text-[11px] font-bold text-muted-foreground">Pembahasan (Opsional)</label>
-                                    <input
-                                      type="text"
-                                      value={editPembahasan}
-                                      onChange={(e) => setEditPembahasan(e.target.value)}
-                                      className="w-full bg-card border border-border rounded-xl px-3 py-1.5 text-xs focus:outline-none focus:border-primary text-foreground"
-                                      placeholder="Penjelasan pembahasan..."
-                                    />
-                                  </div>
-
-                                  <div className="flex justify-end gap-2 pt-2 border-t border-border">
-                                    <button
-                                      type="button"
-                                      onClick={handleCancelEditParsedSoal}
-                                      className="px-3 py-1.5 bg-muted text-muted-foreground font-extrabold text-xs rounded-xl hover:bg-muted/80 transition-all cursor-pointer"
-                                    >
-                                      Batal
-                                    </button>
-                                    <button
-                                      type="button"
-                                      onClick={() => handleSaveEditParsedSoal(item.id)}
-                                      className="px-4 py-1.5 bg-primary text-primary-foreground font-extrabold text-xs rounded-xl hover:scale-105 transition-all cursor-pointer shadow-xs flex items-center gap-1.5"
-                                    >
-                                      <Save className="w-3.5 h-3.5" /> Simpan
-                                    </button>
-                                  </div>
-                                </div>
-                              ) : (
-                                <>
-                                  <p className="font-bold text-foreground text-sm">{item.pertanyaan || '(Pertanyaan kosong)'}</p>
-
-                                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 pt-1">
-                                    {item.opsi.map((opt, oIdx) => (
-                                      <div
-                                        key={oIdx}
-                                        className={`px-3 py-1.5 rounded-xl border text-xs font-medium flex items-center gap-2 ${
-                                          opt.benar
-                                            ? 'bg-success/15 border-success text-success font-bold'
-                                            : 'bg-background border-border text-foreground'
-                                        }`}
-                                      >
-                                        <span className="font-extrabold">{opt.huruf}.</span>
-                                        <span>{opt.teks_opsi}</span>
-                                      </div>
-                                    ))}
-                                  </div>
-
-                                  {item.pembahasan && (
-                                    <p className="text-[11px] text-muted-foreground pt-1 border-t border-border/50">
-                                      <span className="font-bold text-foreground">Pembahasan:</span> {item.pembahasan}
-                                    </p>
-                                  )}
-                                </>
-                              )}
-                            </div>
-                          ))}
-                        </div>
-
-                        {/* Button at the bottom to add a new blank question directly */}
+              {/* Form Create / Edit Quiz */}
+              {(isCreateQuizOpen || editingQuiz) && (
+                <div className="bg-card border border-border rounded-3xl p-6 shadow-sm space-y-6 animate-fade-in">
+                  <div className="border-b border-border pb-4 flex items-center justify-between gap-4 flex-wrap">
+                    <div>
+                      <h3 className="font-extrabold text-lg flex items-center gap-2">
+                        {editingQuiz ? (
+                          <span className="flex items-center gap-1.5 text-amber-500">
+                            <Pencil className="w-5 h-5" /> Edit Quiz: {editingQuiz.title}
+                          </span>
+                        ) : (
+                          <span className="flex items-center gap-2">
+                            <Swords className="w-5 h-5 text-primary" /> Form Tambah Quiz &amp; Bank Soal
+                          </span>
+                        )}
+                      </h3>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        {editingQuiz ? 'Perbarui informasi dan pengaturan quiz.' : 'Terbitkan quiz baru dan impor soal ke Bank Soal kelas.'}
+                      </p>
+                    </div>
+                    {!editingQuiz && (
+                      <div className="flex items-center gap-1.5 bg-muted p-1 rounded-2xl border border-border">
                         <button
                           type="button"
-                          onClick={handleAddNewBlankParsedSoal}
-                          className="w-full py-3 bg-card border-2 border-dashed border-primary/40 hover:border-primary text-primary font-extrabold text-xs rounded-2xl flex items-center justify-center gap-2 hover:bg-primary/5 active:scale-[0.99] transition-all cursor-pointer shadow-xs"
+                          onClick={() => setQuizInputMode('manual')}
+                          className={`px-3.5 py-1.5 rounded-xl text-xs font-extrabold flex items-center gap-1.5 transition-all cursor-pointer ${
+                            quizInputMode === 'manual' ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
+                          }`}
                         >
-                          <Plus className="w-4 h-4 text-primary" />
-                          <span>Tambah Soal Baru di Paling Bawah (Soal #{parsedSoalList.length + 1})</span>
+                          <FileText className="w-3.5 h-3.5" /> Input Manual
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setQuizInputMode('paste')}
+                          className={`px-3.5 py-1.5 rounded-xl text-xs font-extrabold flex items-center gap-1.5 transition-all cursor-pointer ${
+                            quizInputMode === 'paste' ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
+                          }`}
+                        >
+                          Tempel Teks (AI)
                         </button>
                       </div>
                     )}
                   </div>
-                )}
 
-                {/* MODE 2: INPUT MANUAL SATU-SATU BERTAHAP */}
-                {quizInputMode === 'manual' && (
-                  <div className="space-y-5">
-                    {/* Form Question Box */}
-                    <div className="space-y-4 bg-background p-4 md:p-5 rounded-2xl border border-border">
-                      <div className="flex items-center justify-between gap-2 border-b border-border pb-3 flex-wrap">
-                        <h4 className="font-extrabold text-xs uppercase tracking-wider text-primary flex items-center gap-2">
-                          {editingManualIdx !== null ? (
-                            <span className="flex items-center gap-1.5 text-amber-500">
-                              <Pencil className="w-3.5 h-3.5" /> Edit Pertanyaan Soal #{editingManualIdx + 1}
-                            </span>
-                          ) : (
-                            <span>Form Input Pertanyaan — Soal #{manualSoalList.length + 1}</span>
-                          )}
-                        </h4>
-                        <span className="text-[11px] font-bold text-muted-foreground bg-muted px-2.5 py-1 rounded-full">
-                          Total Soal Tersimpan: {manualSoalList.length}
-                        </span>
-                      </div>
-
+                  <form onSubmit={handleCreateQuiz} className="space-y-5">
+                    {/* General Quiz Information */}
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 bg-background p-4 rounded-2xl border border-border">
                       <div>
-                        <label className="block text-xs font-bold text-muted-foreground mb-1">
-                          Pertanyaan Soal #{editingManualIdx !== null ? editingManualIdx + 1 : manualSoalList.length + 1}
-                        </label>
-                        <textarea
-                          rows={3}
-                          placeholder="Tuliskan pertanyaan soal..."
-                          value={manualPertanyaan}
-                          onChange={(e) => setManualPertanyaan(e.target.value)}
-                          className="w-full bg-card border border-border rounded-xl p-3 text-xs focus:outline-none focus:border-primary text-foreground font-semibold"
+                        <label className="block text-xs font-bold text-muted-foreground mb-1">Judul Quiz / Ujian</label>
+                        <input
+                          type="text"
+                          required
+                          placeholder="Contoh: Ulangan Harian Negosiasi"
+                          value={newQuizTitle}
+                          onChange={(e) => setNewQuizTitle(e.target.value)}
+                          className="w-full bg-card border border-border rounded-xl px-4 py-2 text-sm focus:outline-none focus:border-primary"
                         />
                       </div>
-
-                      <div className="space-y-3">
-                        <div className="flex items-center justify-between gap-2 flex-wrap">
-                          <label className="block text-xs font-bold text-muted-foreground">
-                            Opsi Pilihan Ganda ({manualOpsiList.length} Opsi)
-                          </label>
-                          <div className="flex items-center gap-2">
-                            {manualOpsiList.length > 2 && (
-                              <button
-                                type="button"
-                                onClick={handleRemoveManualOption}
-                                className="text-xs font-extrabold text-danger bg-danger/10 hover:bg-danger/20 px-3 py-1.5 rounded-xl transition-all cursor-pointer flex items-center gap-1"
-                                title={`Hapus Opsi Terakhir (${manualOpsiList[manualOpsiList.length - 1].huruf})`}
-                              >
-                                <Trash2 className="w-3.5 h-3.5" /> Hapus Opsi {manualOpsiList[manualOpsiList.length - 1].huruf}
-                              </button>
-                            )}
-                            {manualOpsiList.length < 5 && (
-                              <button
-                                type="button"
-                                onClick={handleAddManualOption}
-                                className="text-xs font-extrabold text-primary bg-primary/10 hover:bg-primary/20 px-3 py-1.5 rounded-xl transition-all cursor-pointer flex items-center gap-1"
-                                title="Tambah Opsi Berikutnya"
-                              >
-                                <Plus className="w-3.5 h-3.5" /> Tambah Opsi {String.fromCharCode(65 + manualOpsiList.length)}
-                              </button>
-                            )}
-                          </div>
-                        </div>
-
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                          {manualOpsiList.map((opt, idx) => (
-                            <div key={opt.huruf}>
-                              <label className="block text-xs font-bold text-muted-foreground mb-1">
-                                Opsi {opt.huruf} {idx < 2 ? '(Wajib)' : '(Opsional)'}
-                              </label>
-                              <input
-                                type="text"
-                                placeholder={`Pilihan ${opt.huruf}`}
-                                value={opt.teks_opsi}
-                                onChange={(e) => handleManualOptionChange(idx, e.target.value)}
-                                className="w-full bg-card border border-border rounded-xl px-3 py-2 text-xs focus:outline-none focus:border-primary text-foreground"
-                              />
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                        <div>
-                          <div className="flex items-center justify-between mb-1">
-                            <label className="block text-xs font-bold text-muted-foreground">Jawaban Benar</label>
-                            {!manualJawaban && (
-                              <span className="text-[10px] font-extrabold text-danger bg-danger/10 px-2 py-0.5 rounded-full flex items-center gap-1">
-                                <AlertCircle className="w-3 h-3" /> Belum dipilih
-                              </span>
-                            )}
-                          </div>
+                      <div>
+                        <label className="block text-xs font-bold text-muted-foreground mb-1">Mata Pelajaran</label>
+                        <div className="relative">
                           <select
-                            value={manualJawaban}
-                            onChange={(e) => setManualJawaban(e.target.value)}
-                            className={`w-full bg-card text-foreground border rounded-xl px-3 py-2 text-xs focus:outline-none focus:border-primary cursor-pointer ${
-                              !manualJawaban ? 'border-danger/60 bg-danger/5' : 'border-border'
-                            }`}
+                            value={newQuizSubject}
+                            onChange={(e) => setNewQuizSubject(e.target.value)}
+                            className="w-full appearance-none bg-card border border-border rounded-xl pl-4 pr-10 py-2 text-sm focus:outline-none focus:border-primary cursor-pointer shadow-sm"
                           >
-                            <option value="" disabled className="bg-card text-foreground">-- Pilih Jawaban Benar --</option>
-                            {manualOpsiList.map(opt => (
-                              <option key={opt.huruf} value={opt.huruf} className="bg-card text-foreground">
-                                Opsi {opt.huruf}
+                            {dbMapelList.map(m => (
+                              <option key={m.id || m.kode} value={m.kode}>
+                                {m.kode} - {m.nama}
                               </option>
                             ))}
                           </select>
-                        </div>
-                        <div>
-                          <label className="block text-xs font-bold text-muted-foreground mb-1">Pembahasan (Opsional)</label>
-                          <input
-                            type="text"
-                            placeholder="Penjelasan jawaban..."
-                            value={manualPembahasan}
-                            onChange={(e) => setManualPembahasan(e.target.value)}
-                            className="w-full bg-card border border-border rounded-xl px-3 py-2 text-xs focus:outline-none focus:border-primary text-foreground"
-                          />
+                          <ChevronDown className="w-4 h-4 text-muted-foreground pointer-events-none absolute right-3.5 top-1/2 -translate-y-1/2" />
                         </div>
                       </div>
-
-                      <div className="flex justify-end gap-2 pt-2 border-t border-border">
-                        {editingManualIdx !== null && (
-                          <button
-                            type="button"
-                            onClick={handleCancelEditManualSoal}
-                            className="bg-muted text-muted-foreground font-extrabold px-4 py-2 rounded-xl text-xs hover:bg-muted/80 transition-all cursor-pointer"
-                          >
-                            Batal Edit
-                          </button>
-                        )}
-                        <button
-                          type="button"
-                          onClick={handleAddManualSoal}
-                          className="bg-primary/10 text-primary border border-primary/30 font-extrabold px-5 py-2 rounded-xl text-xs hover:bg-primary hover:text-primary-foreground transition-all cursor-pointer flex items-center gap-1.5 shadow-xs"
-                        >
-                          <Plus className="w-3.5 h-3.5" />
-                          {editingManualIdx !== null
-                            ? `Simpan Perubahan Soal #${editingManualIdx + 1}`
-                            : `Tambah Soal #${manualSoalList.length + 1} ke Daftar`}
-                        </button>
+                      <div>
+                        <label className="block text-xs font-bold text-muted-foreground mb-1">Deskripsi / Petunjuk (Opsional)</label>
+                        <input
+                          type="text"
+                          placeholder="Contoh: Kerjakan dengan jujur, 10 soal."
+                          value={newQuizDesc}
+                          onChange={(e) => setNewQuizDesc(e.target.value)}
+                          className="w-full bg-card border border-border rounded-xl px-4 py-2 text-sm focus:outline-none focus:border-primary"
+                        />
                       </div>
                     </div>
 
-                    {/* List Preview of Manual Questions Added */}
-                    {manualSoalList.length > 0 && (
-                      <div className="space-y-3 pt-2">
-                        <div className="flex items-center justify-between">
-                          <h4 className="font-extrabold text-sm flex items-center gap-2">
-                            Daftar Soal Manual Terbuat ({manualSoalList.length} Soal)
-                          </h4>
-                        </div>
+                    {/* Setting Acak Soal & Acak Opsi */}
+                    <div className="flex items-center gap-6 bg-background p-4 rounded-2xl border border-border flex-wrap">
+                      <label className="flex items-center gap-2.5 cursor-pointer select-none text-xs font-extrabold text-foreground">
+                        <input
+                          type="checkbox"
+                          checked={acakSoal}
+                          onChange={(e) => setAcakSoal(e.target.checked)}
+                          className="w-4 h-4 rounded border-border text-primary focus:ring-primary cursor-pointer"
+                        />
+                        <span>Acak Urutan Soal</span>
+                      </label>
+                      <label className="flex items-center gap-2.5 cursor-pointer select-none text-xs font-extrabold text-foreground">
+                        <input
+                          type="checkbox"
+                          checked={acakOpsi}
+                          onChange={(e) => setAcakOpsi(e.target.checked)}
+                          className="w-4 h-4 rounded border-border text-primary focus:ring-primary cursor-pointer"
+                        />
+                        <span>Acak Urutan Opsi Jawaban</span>
+                      </label>
+                    </div>
 
-                        <div className="space-y-3 max-h-96 overflow-y-auto pr-1">
-                          {manualSoalList.map((item, index) => (
-                            <div key={item.id || index} className="p-4 rounded-2xl border border-border bg-card text-xs space-y-2 transition-all">
-                              <div className="flex items-start justify-between gap-2">
-                                <span className="font-extrabold text-foreground text-xs bg-primary/10 text-primary px-2.5 py-0.5 rounded-full">
-                                  Soal #{index + 1}
+                    {/* MODE QUESTIONS ONLY IF CREATING NEW QUIZ */}
+                    {!editingQuiz && (
+                      <>
+                        {/* MODE 1: TEMPEL TEKS AI */}
+                        {quizInputMode === 'paste' && (
+                          <div className="space-y-4">
+                            {/* Prompt Template Box for AI */}
+                            <div className="p-4 bg-primary/10 border border-primary/20 rounded-2xl space-y-2.5">
+                              <div className="flex items-center justify-between gap-2 flex-wrap">
+                                <div className="flex items-center gap-2 text-primary font-extrabold text-xs">
+                                  Belum punya soal? Salin prompt ini untuk AI
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={handleCopyPrompt}
+                                  className="bg-primary text-primary-foreground font-extrabold px-3 py-1.5 rounded-xl text-xs flex items-center gap-1.5 hover:scale-105 transition-all cursor-pointer shadow-xs"
+                                >
+                                  {copiedPrompt ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                                  {copiedPrompt ? 'Tersalin!' : 'Salin Prompt'}
+                                </button>
+                              </div>
+                              <textarea
+                                readOnly
+                                rows={9}
+                                value={PROMPT_TEMPLATE}
+                                className="w-full text-xs font-mono bg-card/70 p-3 rounded-xl border border-border text-foreground leading-relaxed focus:outline-none resize-none"
+                              />
+                              <p className="text-[11px] text-muted-foreground font-medium">
+                                💡 <span className="font-bold text-foreground">Tips:</span> Ganti <code className="bg-muted px-1.5 py-0.5 rounded text-primary font-mono font-bold">[jumlah]</code> dan <code className="bg-muted px-1.5 py-0.5 rounded text-primary font-mono font-bold">[topik]</code> sebelum dikirim ke ChatGPT / Claude.
+                              </p>
+                            </div>
+
+                            <div>
+                              <label className="block text-xs font-bold text-muted-foreground mb-1">Tempelkan Teks Hasil Generate AI (ChatGPT / Claude)</label>
+                              <textarea
+                                rows={7}
+                                placeholder="Paste teks daftar soal di sini..."
+                                value={rawSoalText}
+                                onChange={(e) => setRawSoalText(e.target.value)}
+                                className="w-full bg-background border border-border rounded-xl p-3.5 text-xs font-mono focus:outline-none focus:border-primary resize-y"
+                              />
+                            </div>
+
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <button
+                                type="button"
+                                onClick={() => handleParseSoal(true)}
+                                disabled={isParsingSoal || !rawSoalText.trim()}
+                                className="bg-primary text-primary-foreground font-extrabold px-5 py-2.5 rounded-xl text-xs flex items-center gap-2 hover:scale-105 transition-all disabled:opacity-50 cursor-pointer shadow-sm"
+                              >
+                                <Plus className="w-4 h-4" />
+                                {isParsingSoal
+                                  ? 'Memproses Parsing...'
+                                  : (parsedSoalList.length > 0
+                                      ? `+ Parse & Tambah ke Daftar (Soal #${parsedSoalList.length + 1} dst.)`
+                                      : 'Parse Teks Soal')}
+                              </button>
+
+                              {parsedSoalList.length > 0 && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setParsedSoalList([]);
+                                    setEditingSoalId(null);
+                                    showToast('Daftar preview soal dibersihkan');
+                                  }}
+                                  className="bg-muted text-muted-foreground font-extrabold px-4 py-2.5 rounded-xl text-xs hover:bg-danger/10 hover:text-danger transition-all cursor-pointer"
+                                >
+                                  Reset / Bersihkan Preview
+                                </button>
+                              )}
+                            </div>
+
+                            {/* Preview List Soal Hasil Parsing */}
+                            {parsedSoalList.length > 0 && (
+                              <div className="space-y-3 pt-3 border-t border-border">
+                                <div className="flex items-center justify-between">
+                                  <h4 className="font-extrabold text-sm flex items-center gap-2">
+                                    Preview Soal ({parsedSoalList.filter(s => s.status === 'valid').length} Valid, {parsedSoalList.filter(s => s.status === 'error').length} Error)
+                                  </h4>
+                                </div>
+
+                                <div className="space-y-3 max-h-96 overflow-y-auto pr-1">
+                                  {parsedSoalList.map((item, index) => (
+                                    <div
+                                      key={item.id || index}
+                                      className={`p-4 rounded-2xl border text-xs space-y-2 transition-all ${
+                                        item.status === 'valid'
+                                          ? 'bg-card border-success/30'
+                                          : 'bg-danger/10 border-danger/40'
+                                      }`}
+                                    >
+                                      <div className="flex items-start justify-between gap-2">
+                                        <div className="flex items-center gap-2 flex-wrap">
+                                          <span className="font-extrabold text-foreground">Soal #{index + 1}</span>
+                                          {item.status === 'valid' ? (
+                                            <span className="bg-success/20 text-success font-extrabold text-[10px] px-2 py-0.5 rounded-full flex items-center gap-1">
+                                              <CheckCircle2 className="w-3 h-3" /> Valid
+                                            </span>
+                                          ) : (
+                                            <span className="bg-danger text-white font-extrabold text-[10px] px-2 py-0.5 rounded-full flex items-center gap-1">
+                                              <AlertCircle className="w-3 h-3" /> Error: {item.error_message}
+                                            </span>
+                                          )}
+                                        </div>
+                                        <div className="flex items-center gap-1">
+                                          <button
+                                            type="button"
+                                            onClick={() => handleStartEditParsedSoal(item)}
+                                            className="text-muted-foreground hover:text-primary p-1.5 rounded-lg transition-colors cursor-pointer"
+                                            title="Edit Soal Ini"
+                                          >
+                                            <Pencil className="w-4 h-4" />
+                                          </button>
+                                          <button
+                                            type="button"
+                                            onClick={() => handleRemoveParsedSoal(item.id)}
+                                            className="text-muted-foreground hover:text-danger p-1.5 rounded-lg transition-colors cursor-pointer"
+                                            title="Hapus Soal dari Preview"
+                                          >
+                                            <Trash2 className="w-4 h-4" />
+                                          </button>
+                                        </div>
+                                      </div>
+
+                                      {editingSoalId === item.id ? (
+                                        <div className="space-y-3 pt-2 bg-background/80 p-4 rounded-xl border border-primary/40 text-left">
+                                          <div className="space-y-1">
+                                            <label className="block text-[11px] font-bold text-muted-foreground">Pertanyaan Soal #{index + 1}</label>
+                                            <textarea
+                                              rows={2}
+                                              value={editPertanyaan}
+                                              onChange={(e) => setEditPertanyaan(e.target.value)}
+                                              className="w-full bg-card border border-border rounded-xl p-2.5 text-xs focus:outline-none focus:border-primary text-foreground font-semibold resize-y"
+                                              placeholder="Tuliskan pertanyaan..."
+                                            />
+                                          </div>
+
+                                          <div className="space-y-2">
+                                            <div className="flex items-center justify-between flex-wrap gap-2">
+                                              <label className="block text-[11px] font-bold text-muted-foreground flex items-center gap-1.5">
+                                                Opsi Pilihan Ganda ({editOpsi.length} Opsi)
+                                                {!editJawabanHuruf && (
+                                                  <span className="text-[10px] font-extrabold text-danger bg-danger/10 px-2 py-0.5 rounded-full flex items-center gap-1">
+                                                    <AlertCircle className="w-3 h-3" /> Jawaban belum dipilih
+                                                  </span>
+                                                )}
+                                              </label>
+                                              <div className="flex items-center gap-2">
+                                                {(editOpsi || []).length > 2 && (
+                                                  <button
+                                                    type="button"
+                                                    onClick={handleRemoveEditOption}
+                                                    className="text-xs font-extrabold text-danger bg-danger/10 hover:bg-danger/20 px-2.5 py-1 rounded-lg transition-all cursor-pointer flex items-center gap-1"
+                                                    title={`Hapus Opsi Terakhir (${editOpsi[editOpsi.length - 1]?.huruf || String.fromCharCode(64 + editOpsi.length)})`}
+                                                  >
+                                                    <Trash2 className="w-3 h-3" /> Hapus Opsi {editOpsi[editOpsi.length - 1]?.huruf || String.fromCharCode(64 + editOpsi.length)}
+                                                  </button>
+                                                )}
+                                                {(editOpsi || []).length < 5 && (
+                                                  <button
+                                                    type="button"
+                                                    onClick={handleAddEditOption}
+                                                    className="text-xs font-extrabold text-primary bg-primary/10 hover:bg-primary/20 px-2.5 py-1 rounded-lg transition-all cursor-pointer flex items-center gap-1"
+                                                    title="Tambah Opsi Berikutnya"
+                                                  >
+                                                    <Plus className="w-3 h-3" /> Tambah Opsi {String.fromCharCode(65 + editOpsi.length)}
+                                                  </button>
+                                                )}
+                                              </div>
+                                            </div>
+
+                                            <div className="space-y-2">
+                                              {(editOpsi || []).map((opt, oIdx) => {
+                                                const huruf = opt.huruf || String.fromCharCode(65 + oIdx);
+                                                const isCorrect = editJawabanHuruf === huruf;
+                                                const isLast = oIdx === editOpsi.length - 1;
+                                                return (
+                                                  <div key={oIdx} className="flex items-center gap-2">
+                                                    <button
+                                                      type="button"
+                                                      onClick={() => setEditJawabanHuruf(huruf)}
+                                                      className={`w-7 h-7 rounded-lg text-xs font-extrabold flex items-center justify-center shrink-0 border transition-all cursor-pointer ${
+                                                        isCorrect
+                                                          ? 'bg-success text-white border-success shadow-xs'
+                                                          : 'bg-muted text-muted-foreground border-border hover:border-primary/40'
+                                                      }`}
+                                                      title={isCorrect ? 'Kunci Jawaban Benar' : 'Klik untuk jadikan Kunci Jawaban'}
+                                                    >
+                                                      {huruf}
+                                                    </button>
+                                                    <input
+                                                      type="text"
+                                                      value={opt.teks_opsi || ''}
+                                                      onChange={(e) => {
+                                                        const val = e.target.value;
+                                                        setEditOpsi(prev => (prev || []).map((o, i) => i === oIdx ? { ...o, teks_opsi: val } : o));
+                                                      }}
+                                                      placeholder={`Pilihan ${huruf}...`}
+                                                      className={`flex-1 bg-card border rounded-xl px-3 py-1.5 text-xs focus:outline-none focus:border-primary ${
+                                                        isCorrect ? 'border-success/60 text-success font-bold bg-success/5' : 'border-border text-foreground'
+                                                      }`}
+                                                    />
+                                                    {isCorrect && (
+                                                      <span className="text-[10px] font-extrabold text-success bg-success/15 px-2 py-0.5 rounded-full shrink-0">
+                                                        Kunci
+                                                      </span>
+                                                    )}
+                                                    {isLast && (editOpsi || []).length > 2 && (
+                                                      <button
+                                                        type="button"
+                                                        onClick={handleRemoveEditOption}
+                                                        className="text-muted-foreground hover:text-danger p-1 rounded-lg shrink-0 cursor-pointer"
+                                                        title={`Hapus Opsi ${huruf}`}
+                                                      >
+                                                        <X className="w-3.5 h-3.5" />
+                                                      </button>
+                                                    )}
+                                                  </div>
+                                                );
+                                              })}
+                                            </div>
+                                          </div>
+
+                                          <div className="space-y-1">
+                                            <label className="block text-[11px] font-bold text-muted-foreground">Pilih Jawaban Benar (Menyesuaikan {editOpsi.length} Opsi)</label>
+                                            <select
+                                              value={editJawabanHuruf}
+                                              onChange={(e) => setEditJawabanHuruf(e.target.value)}
+                                              className="w-full bg-card border border-border rounded-xl px-3 py-1.5 text-xs focus:outline-none focus:border-primary text-foreground font-extrabold cursor-pointer"
+                                            >
+                                              <option value="" disabled>-- Pilih Jawaban Benar --</option>
+                                              {(editOpsi || []).map((o, i) => {
+                                                const h = o.huruf || String.fromCharCode(65 + i);
+                                                return (
+                                                  <option key={h} value={h}>Opsi {h}</option>
+                                                );
+                                              })}
+                                            </select>
+                                          </div>
+
+                                          <div className="space-y-1">
+                                            <label className="block text-[11px] font-bold text-muted-foreground">Pembahasan (Opsional)</label>
+                                            <input
+                                              type="text"
+                                              value={editPembahasan}
+                                              onChange={(e) => setEditPembahasan(e.target.value)}
+                                              className="w-full bg-card border border-border rounded-xl px-3 py-1.5 text-xs focus:outline-none focus:border-primary text-foreground"
+                                              placeholder="Penjelasan pembahasan..."
+                                            />
+                                          </div>
+
+                                          <div className="flex justify-end gap-2 pt-2 border-t border-border">
+                                            <button
+                                              type="button"
+                                              onClick={handleCancelEditParsedSoal}
+                                              className="px-3 py-1.5 bg-muted text-muted-foreground font-extrabold text-xs rounded-xl hover:bg-muted/80 transition-all cursor-pointer"
+                                            >
+                                              Batal
+                                            </button>
+                                            <button
+                                              type="button"
+                                              onClick={() => handleSaveEditParsedSoal(item.id)}
+                                              className="px-4 py-1.5 bg-primary text-primary-foreground font-extrabold text-xs rounded-xl hover:scale-105 transition-all cursor-pointer shadow-xs flex items-center gap-1.5"
+                                            >
+                                              <Save className="w-3.5 h-3.5" /> Simpan
+                                            </button>
+                                          </div>
+                                        </div>
+                                      ) : (
+                                        <>
+                                          <p className="font-bold text-foreground text-sm">{item.pertanyaan || '(Pertanyaan kosong)'}</p>
+
+                                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 pt-1">
+                                            {item.opsi.map((opt, oIdx) => (
+                                              <div
+                                                key={oIdx}
+                                                className={`px-3 py-1.5 rounded-xl border text-xs font-medium flex items-center gap-2 ${
+                                                  opt.benar
+                                                    ? 'bg-success/15 border-success text-success font-bold'
+                                                    : 'bg-background border-border text-foreground'
+                                                }`}
+                                              >
+                                                <span className="font-extrabold">{opt.huruf}.</span>
+                                                <span>{opt.teks_opsi}</span>
+                                              </div>
+                                            ))}
+                                          </div>
+
+                                          {item.pembahasan && (
+                                            <p className="text-[11px] text-muted-foreground pt-1 border-t border-border/50">
+                                              <span className="font-bold text-foreground">Pembahasan:</span> {item.pembahasan}
+                                            </p>
+                                          )}
+                                        </>
+                                      )}
+                                    </div>
+                                  ))}
+                                </div>
+
+                                {/* Button at the bottom to add a new blank question directly */}
+                                <button
+                                  type="button"
+                                  onClick={handleAddNewBlankParsedSoal}
+                                  className="w-full py-3 bg-card border-2 border-dashed border-primary/40 hover:border-primary text-primary font-extrabold text-xs rounded-2xl flex items-center justify-center gap-2 hover:bg-primary/5 active:scale-[0.99] transition-all cursor-pointer shadow-xs"
+                                >
+                                  <Plus className="w-4 h-4 text-primary" />
+                                  <span>Tambah Soal Baru di Paling Bawah (Soal #{parsedSoalList.length + 1})</span>
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                        )}
+
+                        {/* MODE 2: INPUT MANUAL SATU-SATU BERTAHAP */}
+                        {quizInputMode === 'manual' && (
+                          <div className="space-y-5">
+                            {/* Form Question Box */}
+                            <div className="space-y-4 bg-background p-4 md:p-5 rounded-2xl border border-border">
+                              <div className="flex items-center justify-between gap-2 border-b border-border pb-3 flex-wrap">
+                                <h4 className="font-extrabold text-xs uppercase tracking-wider text-primary flex items-center gap-2">
+                                  {editingManualIdx !== null ? (
+                                    <span className="flex items-center gap-1.5 text-amber-500">
+                                      <Pencil className="w-3.5 h-3.5" /> Edit Pertanyaan Soal #{editingManualIdx + 1}
+                                    </span>
+                                  ) : (
+                                    <span>Form Input Pertanyaan — Soal #{manualSoalList.length + 1}</span>
+                                  )}
+                                </h4>
+                                <span className="text-[11px] font-bold text-muted-foreground bg-muted px-2.5 py-1 rounded-full">
+                                  Total Soal Tersimpan: {manualSoalList.length}
                                 </span>
-                                <div className="flex items-center gap-1">
-                                  <button
-                                    type="button"
-                                    onClick={() => handleStartEditParsedSoal(item)}
-                                    className="text-muted-foreground hover:text-primary p-1.5 rounded-lg transition-colors cursor-pointer"
-                                    title="Edit Soal Ini"
-                                  >
-                                    <Pencil className="w-4 h-4" />
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={() => handleRemoveManualSoal(index)}
-                                    className="text-muted-foreground hover:text-danger p-1.5 rounded-lg transition-colors cursor-pointer"
-                                    title="Hapus Soal Ini"
-                                  >
-                                    <Trash2 className="w-4 h-4" />
-                                  </button>
+                              </div>
+
+                              <div>
+                                <label className="block text-xs font-bold text-muted-foreground mb-1">
+                                  Pertanyaan Soal #{editingManualIdx !== null ? editingManualIdx + 1 : manualSoalList.length + 1}
+                                </label>
+                                <textarea
+                                  rows={3}
+                                  placeholder="Tuliskan pertanyaan soal..."
+                                  value={manualPertanyaan}
+                                  onChange={(e) => setManualPertanyaan(e.target.value)}
+                                  className="w-full bg-card border border-border rounded-xl p-3 text-xs focus:outline-none focus:border-primary text-foreground font-semibold"
+                                />
+                              </div>
+
+                              <div className="space-y-3">
+                                <div className="flex items-center justify-between gap-2 flex-wrap">
+                                  <label className="block text-xs font-bold text-muted-foreground">
+                                    Opsi Pilihan Ganda ({manualOpsiList.length} Opsi)
+                                  </label>
+                                  <div className="flex items-center gap-2">
+                                    {manualOpsiList.length > 2 && (
+                                      <button
+                                        type="button"
+                                        onClick={handleRemoveManualOption}
+                                        className="text-xs font-extrabold text-danger bg-danger/10 hover:bg-danger/20 px-3 py-1.5 rounded-xl transition-all cursor-pointer flex items-center gap-1"
+                                        title={`Hapus Opsi Terakhir (${manualOpsiList[manualOpsiList.length - 1].huruf})`}
+                                      >
+                                        <Trash2 className="w-3.5 h-3.5" /> Hapus Opsi {manualOpsiList[manualOpsiList.length - 1].huruf}
+                                      </button>
+                                    )}
+                                    {manualOpsiList.length < 5 && (
+                                      <button
+                                        type="button"
+                                        onClick={handleAddManualOption}
+                                        className="text-xs font-extrabold text-primary bg-primary/10 hover:bg-primary/20 px-3 py-1.5 rounded-xl transition-all cursor-pointer flex items-center gap-1"
+                                        title="Tambah Opsi Berikutnya"
+                                      >
+                                        <Plus className="w-3.5 h-3.5" /> Tambah Opsi {String.fromCharCode(65 + manualOpsiList.length)}
+                                      </button>
+                                    )}
+                                  </div>
+                                </div>
+
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                  {manualOpsiList.map((opt, idx) => (
+                                    <div key={opt.huruf}>
+                                      <label className="block text-xs font-bold text-muted-foreground mb-1">
+                                        Opsi {opt.huruf} {idx < 2 ? '(Wajib)' : '(Opsional)'}
+                                      </label>
+                                      <input
+                                        type="text"
+                                        placeholder={`Pilihan ${opt.huruf}`}
+                                        value={opt.teks_opsi}
+                                        onChange={(e) => handleManualOptionChange(idx, e.target.value)}
+                                        className="w-full bg-card border border-border rounded-xl px-3 py-2 text-xs focus:outline-none focus:border-primary text-foreground"
+                                      />
+                                    </div>
+                                  ))}
                                 </div>
                               </div>
 
-                              {editingSoalId === item.id ? (
-                                <div className="space-y-3 pt-2 bg-background/80 p-4 rounded-xl border border-primary/40 text-left">
-                                  <div className="space-y-1">
-                                    <label className="block text-[11px] font-bold text-muted-foreground">Pertanyaan Soal #{index + 1}</label>
-                                    <textarea
-                                      rows={2}
-                                      value={editPertanyaan}
-                                      onChange={(e) => setEditPertanyaan(e.target.value)}
-                                      className="w-full bg-card border border-border rounded-xl p-2.5 text-xs focus:outline-none focus:border-primary text-foreground font-semibold resize-y"
-                                      placeholder="Tuliskan pertanyaan..."
-                                    />
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                <div>
+                                  <div className="flex items-center justify-between mb-1">
+                                    <label className="block text-xs font-bold text-muted-foreground">Jawaban Benar</label>
+                                    {!manualJawaban && (
+                                      <span className="text-[10px] font-extrabold text-danger bg-danger/10 px-2 py-0.5 rounded-full flex items-center gap-1">
+                                        <AlertCircle className="w-3 h-3" /> Belum dipilih
+                                      </span>
+                                    )}
                                   </div>
+                                  <select
+                                    value={manualJawaban}
+                                    onChange={(e) => setManualJawaban(e.target.value)}
+                                    className={`w-full bg-card text-foreground border rounded-xl px-3 py-2 text-xs focus:outline-none focus:border-primary cursor-pointer ${
+                                      !manualJawaban ? 'border-danger/60 bg-danger/5' : 'border-border'
+                                    }`}
+                                  >
+                                    <option value="" disabled className="bg-card text-foreground">-- Pilih Jawaban Benar --</option>
+                                    {manualOpsiList.map(opt => (
+                                      <option key={opt.huruf} value={opt.huruf} className="bg-card text-foreground">
+                                        Opsi {opt.huruf}
+                                      </option>
+                                    ))}
+                                  </select>
+                                </div>
+                                <div>
+                                  <label className="block text-xs font-bold text-muted-foreground mb-1">Pembahasan (Opsional)</label>
+                                  <input
+                                    type="text"
+                                    placeholder="Penjelasan jawaban..."
+                                    value={manualPembahasan}
+                                    onChange={(e) => setManualPembahasan(e.target.value)}
+                                    className="w-full bg-card border border-border rounded-xl px-3 py-2 text-xs focus:outline-none focus:border-primary text-foreground"
+                                  />
+                                </div>
+                              </div>
 
-                                  <div className="space-y-2">
-                                    <div className="flex items-center justify-between flex-wrap gap-2">
-                                      <label className="block text-[11px] font-bold text-muted-foreground flex items-center gap-1.5">
-                                        Opsi Pilihan Ganda ({editOpsi.length} Opsi)
-                                        {!editJawabanHuruf && (
-                                          <span className="text-[10px] font-extrabold text-danger bg-danger/10 px-2 py-0.5 rounded-full flex items-center gap-1">
-                                            <AlertCircle className="w-3 h-3" /> Jawaban belum dipilih
-                                          </span>
-                                        )}
-                                      </label>
-                                      <div className="flex items-center gap-2">
-                                        {(editOpsi || []).length > 2 && (
+                              <div className="flex justify-end gap-2 pt-2 border-t border-border">
+                                {editingManualIdx !== null && (
+                                  <button
+                                    type="button"
+                                    onClick={handleCancelEditManualSoal}
+                                    className="bg-muted text-muted-foreground font-extrabold px-4 py-2 rounded-xl text-xs hover:bg-muted/80 transition-all cursor-pointer"
+                                  >
+                                    Batal Edit
+                                  </button>
+                                )}
+                                <button
+                                  type="button"
+                                  onClick={handleAddManualSoal}
+                                  className="bg-primary/10 text-primary border border-primary/30 font-extrabold px-5 py-2 rounded-xl text-xs hover:bg-primary hover:text-primary-foreground transition-all cursor-pointer flex items-center gap-1.5 shadow-xs"
+                                >
+                                  <Plus className="w-3.5 h-3.5" />
+                                  {editingManualIdx !== null
+                                    ? `Simpan Perubahan Soal #${editingManualIdx + 1}`
+                                    : `Tambah Soal #${manualSoalList.length + 1} ke Daftar`}
+                                </button>
+                              </div>
+                            </div>
+
+                            {/* List Preview of Manual Questions Added */}
+                            {manualSoalList.length > 0 && (
+                              <div className="space-y-3 pt-2">
+                                <div className="flex items-center justify-between">
+                                  <h4 className="font-extrabold text-sm flex items-center gap-2">
+                                    Daftar Soal Manual Terbuat ({manualSoalList.length} Soal)
+                                  </h4>
+                                </div>
+
+                                <div className="space-y-3 max-h-96 overflow-y-auto pr-1">
+                                  {manualSoalList.map((item, index) => (
+                                    <div key={item.id || index} className="p-4 rounded-2xl border border-border bg-card text-xs space-y-2 transition-all">
+                                      <div className="flex items-start justify-between gap-2">
+                                        <span className="font-extrabold text-foreground text-xs bg-primary/10 text-primary px-2.5 py-0.5 rounded-full">
+                                          Soal #{index + 1}
+                                        </span>
+                                        <div className="flex items-center gap-1">
                                           <button
                                             type="button"
-                                            onClick={handleRemoveEditOption}
-                                            className="text-xs font-extrabold text-danger bg-danger/10 hover:bg-danger/20 px-2.5 py-1 rounded-lg transition-all cursor-pointer flex items-center gap-1"
-                                            title={`Hapus Opsi Terakhir (${editOpsi[editOpsi.length - 1]?.huruf || String.fromCharCode(64 + editOpsi.length)})`}
+                                            onClick={() => handleStartEditParsedSoal(item)}
+                                            className="text-muted-foreground hover:text-primary p-1.5 rounded-lg transition-colors cursor-pointer"
+                                            title="Edit Soal Ini"
                                           >
-                                            <Trash2 className="w-3 h-3" /> Hapus Opsi {editOpsi[editOpsi.length - 1]?.huruf || String.fromCharCode(64 + editOpsi.length)}
+                                            <Pencil className="w-4 h-4" />
                                           </button>
-                                        )}
-                                        {(editOpsi || []).length < 5 && (
                                           <button
                                             type="button"
-                                            onClick={handleAddEditOption}
-                                            className="text-xs font-extrabold text-primary bg-primary/10 hover:bg-primary/20 px-2.5 py-1 rounded-lg transition-all cursor-pointer flex items-center gap-1"
-                                            title="Tambah Opsi Berikutnya"
+                                            onClick={() => handleRemoveManualSoal(index)}
+                                            className="text-muted-foreground hover:text-danger p-1.5 rounded-lg transition-colors cursor-pointer"
+                                            title="Hapus Soal Ini"
                                           >
-                                            <Plus className="w-3 h-3" /> Tambah Opsi {String.fromCharCode(65 + editOpsi.length)}
+                                            <Trash2 className="w-4 h-4" />
                                           </button>
-                                        )}
+                                        </div>
                                       </div>
-                                    </div>
 
-                                    <div className="space-y-2">
-                                      {(editOpsi || []).map((opt, oIdx) => {
-                                        const huruf = opt.huruf || String.fromCharCode(65 + oIdx);
-                                        const isCorrect = editJawabanHuruf === huruf;
-                                        const isLast = oIdx === editOpsi.length - 1;
-                                        return (
-                                          <div key={oIdx} className="flex items-center gap-2">
-                                            <button
-                                              type="button"
-                                              onClick={() => setEditJawabanHuruf(huruf)}
-                                              className={`w-7 h-7 rounded-lg text-xs font-extrabold flex items-center justify-center shrink-0 border transition-all cursor-pointer ${
-                                                isCorrect
-                                                  ? 'bg-success text-white border-success shadow-xs'
-                                                  : 'bg-muted text-muted-foreground border-border hover:border-primary/40'
-                                              }`}
-                                              title={isCorrect ? 'Kunci Jawaban Benar' : 'Klik untuk jadikan Kunci Jawaban'}
-                                            >
-                                              {huruf}
-                                            </button>
+                                      {editingSoalId === item.id ? (
+                                        <div className="space-y-3 pt-2 bg-background/80 p-4 rounded-xl border border-primary/40 text-left">
+                                          <div className="space-y-1">
+                                            <label className="block text-[11px] font-bold text-muted-foreground">Pertanyaan Soal #{index + 1}</label>
+                                            <textarea
+                                              rows={2}
+                                              value={editPertanyaan}
+                                              onChange={(e) => setEditPertanyaan(e.target.value)}
+                                              className="w-full bg-card border border-border rounded-xl p-2.5 text-xs focus:outline-none focus:border-primary text-foreground font-semibold resize-y"
+                                              placeholder="Tuliskan pertanyaan..."
+                                            />
+                                          </div>
+
+                                          <div className="space-y-2">
+                                            <div className="flex items-center justify-between flex-wrap gap-2">
+                                              <label className="block text-[11px] font-bold text-muted-foreground flex items-center gap-1.5">
+                                                Opsi Pilihan Ganda ({editOpsi.length} Opsi)
+                                                {!editJawabanHuruf && (
+                                                  <span className="text-[10px] font-extrabold text-danger bg-danger/10 px-2 py-0.5 rounded-full flex items-center gap-1">
+                                                    <AlertCircle className="w-3 h-3" /> Jawaban belum dipilih
+                                                  </span>
+                                                )}
+                                              </label>
+                                              <div className="flex items-center gap-2">
+                                                {(editOpsi || []).length > 2 && (
+                                                  <button
+                                                    type="button"
+                                                    onClick={handleRemoveEditOption}
+                                                    className="text-xs font-extrabold text-danger bg-danger/10 hover:bg-danger/20 px-2.5 py-1 rounded-lg transition-all cursor-pointer flex items-center gap-1"
+                                                    title={`Hapus Opsi Terakhir (${editOpsi[editOpsi.length - 1]?.huruf || String.fromCharCode(64 + editOpsi.length)})`}
+                                                  >
+                                                    <Trash2 className="w-3 h-3" /> Hapus Opsi {editOpsi[editOpsi.length - 1]?.huruf || String.fromCharCode(64 + editOpsi.length)}
+                                                  </button>
+                                                )}
+                                                {(editOpsi || []).length < 5 && (
+                                                  <button
+                                                    type="button"
+                                                    onClick={handleAddEditOption}
+                                                    className="text-xs font-extrabold text-primary bg-primary/10 hover:bg-primary/20 px-2.5 py-1 rounded-lg transition-all cursor-pointer flex items-center gap-1"
+                                                    title="Tambah Opsi Berikutnya"
+                                                  >
+                                                    <Plus className="w-3 h-3" /> Tambah Opsi {String.fromCharCode(65 + editOpsi.length)}
+                                                  </button>
+                                                )}
+                                              </div>
+                                            </div>
+
+                                            <div className="space-y-2">
+                                              {(editOpsi || []).map((opt, oIdx) => {
+                                                const huruf = opt.huruf || String.fromCharCode(65 + oIdx);
+                                                const isCorrect = editJawabanHuruf === huruf;
+                                                const isLast = oIdx === editOpsi.length - 1;
+                                                return (
+                                                  <div key={oIdx} className="flex items-center gap-2">
+                                                    <button
+                                                      type="button"
+                                                      onClick={() => setEditJawabanHuruf(huruf)}
+                                                      className={`w-7 h-7 rounded-lg text-xs font-extrabold flex items-center justify-center shrink-0 border transition-all cursor-pointer ${
+                                                        isCorrect
+                                                          ? 'bg-success text-white border-success shadow-xs'
+                                                          : 'bg-muted text-muted-foreground border-border hover:border-primary/40'
+                                                      }`}
+                                                      title={isCorrect ? 'Kunci Jawaban Benar' : 'Klik untuk jadikan Kunci Jawaban'}
+                                                    >
+                                                      {huruf}
+                                                    </button>
+                                                    <input
+                                                      type="text"
+                                                      value={opt.teks_opsi || ''}
+                                                      onChange={(e) => {
+                                                        const val = e.target.value;
+                                                        setEditOpsi(prev => (prev || []).map((o, i) => i === oIdx ? { ...o, teks_opsi: val } : o));
+                                                      }}
+                                                      placeholder={`Pilihan ${huruf}...`}
+                                                      className={`flex-1 bg-card border rounded-xl px-3 py-1.5 text-xs focus:outline-none focus:border-primary ${
+                                                        isCorrect ? 'border-success/60 text-success font-bold bg-success/5' : 'border-border text-foreground'
+                                                      }`}
+                                                    />
+                                                    {isCorrect && (
+                                                      <span className="text-[10px] font-extrabold text-success bg-success/15 px-2 py-0.5 rounded-full shrink-0">
+                                                        Kunci
+                                                      </span>
+                                                    )}
+                                                    {isLast && (editOpsi || []).length > 2 && (
+                                                      <button
+                                                        type="button"
+                                                        onClick={handleRemoveEditOption}
+                                                        className="text-muted-foreground hover:text-danger p-1 rounded-lg shrink-0 cursor-pointer"
+                                                        title={`Hapus Opsi ${huruf}`}
+                                                      >
+                                                        <X className="w-3.5 h-3.5" />
+                                                      </button>
+                                                    )}
+                                                  </div>
+                                                );
+                                              })}
+                                            </div>
+                                          </div>
+
+                                          <div className="space-y-1">
+                                            <label className="block text-[11px] font-bold text-muted-foreground">Pembahasan (Opsional)</label>
                                             <input
                                               type="text"
-                                              value={opt.teks_opsi || ''}
-                                              onChange={(e) => {
-                                                const val = e.target.value;
-                                                setEditOpsi(prev => (prev || []).map((o, i) => i === oIdx ? { ...o, teks_opsi: val } : o));
-                                              }}
-                                              placeholder={`Pilihan ${huruf}...`}
-                                              className={`flex-1 bg-card border rounded-xl px-3 py-1.5 text-xs focus:outline-none focus:border-primary ${
-                                                isCorrect ? 'border-success/60 text-success font-bold bg-success/5' : 'border-border text-foreground'
-                                              }`}
+                                              value={editPembahasan}
+                                              onChange={(e) => setEditPembahasan(e.target.value)}
+                                              className="w-full bg-card border border-border rounded-xl px-3 py-1.5 text-xs focus:outline-none focus:border-primary text-foreground"
+                                              placeholder="Penjelasan pembahasan..."
                                             />
-                                            {isCorrect && (
-                                              <span className="text-[10px] font-extrabold text-success bg-success/15 px-2 py-0.5 rounded-full shrink-0">
-                                                Kunci
-                                              </span>
-                                            )}
-                                            {isLast && (editOpsi || []).length > 2 && (
-                                              <button
-                                                type="button"
-                                                onClick={handleRemoveEditOption}
-                                                className="text-muted-foreground hover:text-danger p-1 rounded-lg shrink-0 cursor-pointer"
-                                                title={`Hapus Opsi ${huruf}`}
-                                              >
-                                                <X className="w-3.5 h-3.5" />
-                                              </button>
-                                            )}
                                           </div>
-                                        );
-                                      })}
+
+                                          <div className="flex justify-end gap-2 pt-2 border-t border-border">
+                                            <button
+                                              type="button"
+                                              onClick={handleCancelEditParsedSoal}
+                                              className="px-3 py-1.5 bg-muted text-muted-foreground font-extrabold text-xs rounded-xl hover:bg-muted/80 transition-all cursor-pointer"
+                                            >
+                                              Batal
+                                            </button>
+                                            <button
+                                              type="button"
+                                              onClick={() => handleSaveEditParsedSoal(item.id)}
+                                              className="px-4 py-1.5 bg-primary text-primary-foreground font-extrabold text-xs rounded-xl hover:scale-105 transition-all cursor-pointer shadow-xs flex items-center gap-1.5"
+                                            >
+                                              <Save className="w-3.5 h-3.5" /> Simpan
+                                            </button>
+                                          </div>
+                                        </div>
+                                      ) : (
+                                        <>
+                                          <p className="font-bold text-foreground text-sm">{item.pertanyaan}</p>
+
+                                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 pt-1">
+                                            {item.opsi.map((opt, oIdx) => (
+                                              <div
+                                                key={oIdx}
+                                                className={`px-3 py-1.5 rounded-xl border text-xs font-medium flex items-center gap-2 ${
+                                                  opt.benar
+                                                    ? 'bg-success/15 border-success text-success font-bold'
+                                                    : 'bg-background border-border text-foreground'
+                                                }`}
+                                              >
+                                                <span className="font-extrabold">{opt.huruf}.</span>
+                                                <span>{opt.teks_opsi}</span>
+                                                {opt.benar && <span className="text-[10px] ml-auto bg-success text-white px-1.5 py-0.5 rounded font-extrabold">Kunci</span>}
+                                              </div>
+                                            ))}
+                                          </div>
+
+                                          {item.pembahasan && (
+                                            <p className="text-[11px] text-muted-foreground pt-1 border-t border-border/50">
+                                              <span className="font-bold text-foreground">Pembahasan:</span> {item.pembahasan}
+                                            </p>
+                                          )}
+                                        </>
+                                      )}
                                     </div>
-                                  </div>
-
-                                  <div className="space-y-1">
-                                    <label className="block text-[11px] font-bold text-muted-foreground">Pembahasan (Opsional)</label>
-                                    <input
-                                      type="text"
-                                      value={editPembahasan}
-                                      onChange={(e) => setEditPembahasan(e.target.value)}
-                                      className="w-full bg-card border border-border rounded-xl px-3 py-1.5 text-xs focus:outline-none focus:border-primary text-foreground"
-                                      placeholder="Penjelasan pembahasan..."
-                                    />
-                                  </div>
-
-                                  <div className="flex justify-end gap-2 pt-2 border-t border-border">
-                                    <button
-                                      type="button"
-                                      onClick={handleCancelEditParsedSoal}
-                                      className="px-3 py-1.5 bg-muted text-muted-foreground font-extrabold text-xs rounded-xl hover:bg-muted/80 transition-all cursor-pointer"
-                                    >
-                                      Batal
-                                    </button>
-                                    <button
-                                      type="button"
-                                      onClick={() => handleSaveEditParsedSoal(item.id)}
-                                      className="px-4 py-1.5 bg-primary text-primary-foreground font-extrabold text-xs rounded-xl hover:scale-105 transition-all cursor-pointer shadow-xs flex items-center gap-1.5"
-                                    >
-                                      <Save className="w-3.5 h-3.5" /> Simpan
-                                    </button>
-                                  </div>
+                                  ))}
                                 </div>
-                              ) : (
-                                <>
-                                  <p className="font-bold text-foreground text-sm">{item.pertanyaan}</p>
-
-                                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 pt-1">
-                                    {item.opsi.map((opt, oIdx) => (
-                                      <div
-                                        key={oIdx}
-                                        className={`px-3 py-1.5 rounded-xl border text-xs font-medium flex items-center gap-2 ${
-                                          opt.benar
-                                            ? 'bg-success/15 border-success text-success font-bold'
-                                            : 'bg-background border-border text-foreground'
-                                        }`}
-                                      >
-                                        <span className="font-extrabold">{opt.huruf}.</span>
-                                        <span>{opt.teks_opsi}</span>
-                                        {opt.benar && <span className="text-[10px] ml-auto bg-success text-white px-1.5 py-0.5 rounded font-extrabold">Kunci</span>}
-                                      </div>
-                                    ))}
-                                  </div>
-
-                                  {item.pembahasan && (
-                                    <p className="text-[11px] text-muted-foreground pt-1 border-t border-border/50">
-                                      <span className="font-bold text-foreground">Pembahasan:</span> {item.pembahasan}
-                                    </p>
-                                  )}
-                                </>
-                              )}
-                            </div>
-                          ))}
-                        </div>
-                      </div>
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </>
                     )}
-                  </div>
-                )}
 
-                <div className="flex justify-end gap-3 pt-2">
-                  <button
-                    type="submit"
-                    className="bg-primary text-primary-foreground font-extrabold px-6 py-2.5 rounded-xl text-xs shadow-glow flex items-center gap-1.5 hover:scale-105 transition-all cursor-pointer"
-                  >
-                    Simpan Soal &amp; Terbitkan Kuis
-                  </button>
+                    <div className="flex justify-end gap-3 pt-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsCreateQuizOpen(false);
+                          setEditingQuiz(null);
+                        }}
+                        className="bg-muted text-muted-foreground font-extrabold px-4 py-2 rounded-xl text-xs hover:bg-muted/80 transition-all cursor-pointer"
+                      >
+                        Batal
+                      </button>
+                      <button
+                        type="submit"
+                        disabled={isSavingQuiz || isUpdatingQuiz}
+                        className="bg-primary text-primary-foreground font-extrabold px-6 py-2.5 rounded-xl text-xs shadow-glow flex items-center gap-1.5 hover:scale-105 transition-all cursor-pointer disabled:opacity-50"
+                      >
+                        {editingQuiz ? 'Simpan Perubahan Quiz' : 'Simpan Soal & Terbitkan Quiz'}
+                      </button>
+                    </div>
+                  </form>
                 </div>
-              </form>
+              )}
+
+              {/* Tabel Daftar Quiz */}
+              <div className="bg-card border border-border rounded-3xl p-6 shadow-sm space-y-4">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs border-collapse">
+                    <thead>
+                      <tr className="border-b border-border text-muted-foreground font-extrabold uppercase tracking-wider text-[10px]">
+                        <th className="pb-3 px-3">Mapel</th>
+                        <th className="pb-3 px-3">Judul Quiz</th>
+                        <th className="pb-3 px-3">Deskripsi</th>
+                        <th className="pb-3 px-3">Jumlah Soal</th>
+                        <th className="pb-3 px-3 text-right">Aksi</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-border">
+                      {isLoadingQuiz ? (
+                        <tr>
+                          <td colSpan="5" className="py-8 text-center text-muted-foreground">
+                            <div className="flex items-center justify-center gap-2">
+                              <Loader2 className="w-5 h-5 text-primary animate-spin" />
+                              <span className="font-extrabold text-xs">Memuat daftar quiz...</span>
+                            </div>
+                          </td>
+                        </tr>
+                      ) : filteredQuizList.length > 0 ? (
+                        filteredQuizList.map((quiz, idx) => (
+                          <tr key={quiz.id || idx} className="hover:bg-muted/30 transition-colors">
+                            <td className="py-3 px-3">
+                              <span className="font-mono font-extrabold bg-primary/10 text-primary px-2 py-0.5 rounded-md text-[11px]">
+                                {quiz.subject || 'PWP'}
+                              </span>
+                            </td>
+                            <td className="py-3 px-3">
+                              <p className="font-bold text-foreground text-sm">{quiz.title}</p>
+                            </td>
+                            <td className="py-3 px-3">
+                              <p className="text-[11px] text-muted-foreground line-clamp-1">{quiz.description || '-'}</p>
+                            </td>
+                            <td className="py-3 px-3">
+                              <span className="bg-muted text-foreground font-extrabold text-[10px] px-2 py-0.5 rounded-full border border-border">
+                                {quiz.questionsCount || 0} Soal
+                              </span>
+                            </td>
+                            <td className="py-3 px-3 text-right">
+                              <div className="flex items-center justify-end gap-2">
+                                <button
+                                  type="button"
+                                  onClick={() => handleOpenEditQuiz(quiz)}
+                                  className="bg-primary/10 hover:bg-primary/20 text-primary font-extrabold px-3 py-1.5 rounded-xl text-xs transition-all cursor-pointer inline-flex items-center gap-1"
+                                  title="Edit Quiz"
+                                >
+                                  <Pencil className="w-3.5 h-3.5" />
+                                  <span>Edit</span>
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleDeleteQuiz(quiz.id, quiz.title)}
+                                  className="bg-muted hover:bg-danger/20 hover:text-danger text-muted-foreground font-extrabold px-3 py-1.5 rounded-xl text-xs transition-all cursor-pointer inline-flex items-center gap-1"
+                                  title="Hapus Quiz"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                  <span>Hapus</span>
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        ))
+                      ) : dbQuizList.length > 0 && filteredQuizList.length === 0 ? (
+                        <tr>
+                          <td colSpan="5" className="py-8 text-center text-muted-foreground italic">
+                            Tidak ada quiz untuk mata pelajaran "{selectedQuizMapelFilter}".
+                          </td>
+                        </tr>
+                      ) : (
+                        <tr>
+                          <td colSpan="5" className="py-8 text-center text-muted-foreground italic">
+                            Belum ada quiz di kelas ini.
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
             </div>
           )}
 
@@ -2763,98 +3800,103 @@ Pisahkan tiap soal dengan baris kosong. Jangan pakai markdown (bold/italic), jan
                 </div>
               </div>
 
-              {/* Side-by-Side Preview Comparison Modal / Box */}
-              {verifyingMaterial && (
-                <div className="bg-background border border-border rounded-3xl p-6 shadow-xl space-y-4 animate-fade-in">
-                  <div className="flex items-center justify-between border-b border-border pb-3 flex-wrap gap-2">
-                    <div>
-                      <span className="text-[10px] font-extrabold bg-primary/10 text-primary px-2.5 py-1 rounded-md uppercase">
-                        {verifyingMaterial.subject}
-                      </span>
-                      <h4 className="font-extrabold text-base text-foreground mt-1">{verifyingMaterial.title}</h4>
-                      <p className="text-xs text-muted-foreground">Perbandingan Versi Sebelumnya vs Versi Baru Pengajuan Admin</p>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => setVerifyingMaterial(null)}
-                      className="p-1.5 rounded-xl bg-muted text-muted-foreground hover:text-foreground cursor-pointer"
-                    >
-                      <X className="w-5 h-5" />
-                    </button>
-                  </div>
-
-                  {/* 2-Column Grid Comparison */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {/* LEFT COLUMN: Versi Sebelumnya */}
-                    <div className="p-4 rounded-2xl border border-border bg-card space-y-3">
-                      <div className="flex items-center justify-between border-b border-border/60 pb-2">
-                        <span className="font-extrabold text-xs text-muted-foreground flex items-center gap-1.5">
-                          <History className="w-4 h-4 text-muted-foreground" />
-                          Versi Sebelumnya ({verifyingMaterial.prevVersion?.version ? `v${verifyingMaterial.prevVersion.version}` : 'Versi Awal'})
+              {/* Preview & Verification Modal / Box */}
+              {verifyingMaterial && (() => {
+                const hasPrevVersion = Boolean(verifyingMaterial.prevVersion?.content);
+                return (
+                  <div className="bg-background border border-border rounded-3xl p-6 shadow-xl space-y-4 animate-fade-in">
+                    <div className="flex items-center justify-between border-b border-border pb-3 flex-wrap gap-2">
+                      <div>
+                        <span className="text-[10px] font-extrabold bg-primary/10 text-primary px-2.5 py-1 rounded-md uppercase">
+                          {verifyingMaterial.subject}
                         </span>
-                        <span className="bg-success/15 text-success font-extrabold text-[10px] px-2 py-0.5 rounded-full">
-                          Terverifikasi
-                        </span>
+                        <h4 className="font-extrabold text-base text-foreground mt-1">{verifyingMaterial.title}</h4>
+                        <p className="text-xs text-muted-foreground">
+                          {hasPrevVersion 
+                            ? "Perbandingan Versi Sebelumnya vs Versi Baru Pengajuan Admin" 
+                            : "Pengajuan Materi Baru oleh Admin"}
+                        </p>
                       </div>
-                      <div className="text-xs text-muted-foreground">
-                        <p className="font-semibold">Pembuat: <strong>{verifyingMaterial.prevVersion?.author || 'Owner'}</strong></p>
-                      </div>
-                      <div className="p-3 rounded-xl bg-background border border-border/50 text-xs leading-relaxed text-foreground min-h-[120px]">
-                        {verifyingMaterial.prevVersion?.content ? (
-                          <div dangerouslySetInnerHTML={{ __html: verifyingMaterial.prevVersion.content }} />
-                        ) : (
-                          <p className="italic text-muted-foreground">Ini adalah versi pertama (Belum ada versi sebelumnya untuk dibandingkan).</p>
-                        )}
-                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setVerifyingMaterial(null)}
+                        className="p-1.5 rounded-xl bg-muted text-muted-foreground hover:text-foreground cursor-pointer"
+                      >
+                        <X className="w-5 h-5" />
+                      </button>
                     </div>
 
-                    {/* RIGHT COLUMN: Versi Baru (Pengajuan Admin) */}
-                    <div className="p-4 rounded-2xl border border-amber-500/30 bg-amber-500/5 space-y-3">
-                      <div className="flex items-center justify-between border-b border-amber-500/20 pb-2">
-                        <span className="font-extrabold text-xs text-amber-500 flex items-center gap-1.5">
-                          <FileText className="w-4 h-4 text-amber-500" />
-                          Versi Baru (v{verifyingMaterial.newVersion?.version || 2})
-                        </span>
-                        <span className="bg-amber-500/20 text-amber-500 font-extrabold text-[10px] px-2 py-0.5 rounded-full">
-                          Menunggu Verifikasi
-                        </span>
-                      </div>
-                      <div className="text-xs text-muted-foreground">
-                        <p className="font-semibold">Diajukan Oleh Admin: <strong>{verifyingMaterial.author}</strong></p>
-                      </div>
-                      <div className="p-3 rounded-xl bg-card border border-amber-500/30 text-xs leading-relaxed text-foreground min-h-[120px]">
-                        {verifyingMaterial.newVersion?.content ? (
-                          <div dangerouslySetInnerHTML={{ __html: verifyingMaterial.newVersion.content }} />
-                        ) : (
-                          <p className="italic text-muted-foreground">(Isi rangkuman baru kosong)</p>
-                        )}
+                    {/* Comparison or Single View Grid */}
+                    <div className={`grid grid-cols-1 ${hasPrevVersion ? 'md:grid-cols-2' : ''} gap-4`}>
+                      {/* LEFT COLUMN: Versi Sebelumnya (Hanya jika ada versi sebelumnya) */}
+                      {hasPrevVersion && (
+                        <div className="p-4 rounded-2xl border border-border bg-card space-y-3">
+                          <div className="flex items-center justify-between border-b border-border/60 pb-2">
+                            <span className="font-extrabold text-xs text-muted-foreground flex items-center gap-1.5">
+                              <History className="w-4 h-4 text-muted-foreground" />
+                              Versi Sebelumnya ({verifyingMaterial.prevVersion?.version ? `v${verifyingMaterial.prevVersion.version}` : 'v1'})
+                            </span>
+                            <span className="bg-success/15 text-success font-extrabold text-[10px] px-2 py-0.5 rounded-full">
+                              Terverifikasi
+                            </span>
+                          </div>
+                          <div className="text-xs text-muted-foreground">
+                            <p className="font-semibold">Pembuat: <strong>{verifyingMaterial.prevVersion?.author || 'Owner'}</strong></p>
+                          </div>
+                          <div className="p-3 rounded-xl bg-background border border-border/50 text-xs leading-relaxed text-foreground min-h-[120px]">
+                            <div dangerouslySetInnerHTML={{ __html: verifyingMaterial.prevVersion.content }} />
+                          </div>
+                        </div>
+                      )}
+
+                      {/* RIGHT / MAIN COLUMN: Versi Baru (Pengajuan Admin) */}
+                      <div className="p-4 rounded-2xl border border-amber-500/30 bg-amber-500/5 space-y-3">
+                        <div className="flex items-center justify-between border-b border-amber-500/20 pb-2">
+                          <span className="font-extrabold text-xs text-amber-500 flex items-center gap-1.5">
+                            <FileText className="w-4 h-4 text-amber-500" />
+                            {hasPrevVersion ? `Versi Baru (v${verifyingMaterial.newVersion?.version || 2})` : 'Detail Materi Baru (v1)'}
+                          </span>
+                          <span className="bg-amber-500/20 text-amber-500 font-extrabold text-[10px] px-2 py-0.5 rounded-full">
+                            Menunggu Verifikasi
+                          </span>
+                        </div>
+                        <div className="text-xs text-muted-foreground">
+                          <p className="font-semibold">Diajukan Oleh Admin: <strong>{verifyingMaterial.author}</strong></p>
+                        </div>
+                        <div className="p-3 rounded-xl bg-card border border-amber-500/30 text-xs leading-relaxed text-foreground min-h-[120px]">
+                          {verifyingMaterial.newVersion?.content || verifyingMaterial.content ? (
+                            <div dangerouslySetInnerHTML={{ __html: verifyingMaterial.newVersion?.content || verifyingMaterial.content }} />
+                          ) : (
+                            <p className="italic text-muted-foreground">(Isi rangkuman baru kosong)</p>
+                          )}
+                        </div>
                       </div>
                     </div>
-                  </div>
 
-                  {/* Actions inside Preview */}
-                  <div className="flex justify-end gap-3 pt-3 border-t border-border">
-                    <button
-                      onClick={() => {
-                        handleRejectPending(verifyingMaterial.id, verifyingMaterial.versiId, verifyingMaterial.title);
-                        setVerifyingMaterial(null);
-                      }}
-                      className="bg-muted hover:bg-danger/20 hover:text-danger text-muted-foreground font-bold px-4 py-2 rounded-xl text-xs transition-colors cursor-pointer"
-                    >
-                      Tolak Pengajuan
-                    </button>
-                    <button
-                      onClick={() => {
-                        handleApprovePending(verifyingMaterial.id, verifyingMaterial.versiId, verifyingMaterial.title);
-                        setVerifyingMaterial(null);
-                      }}
-                      className="bg-success text-white font-extrabold px-5 py-2 rounded-xl text-xs flex items-center gap-1 shadow-sm hover:scale-105 transition-all cursor-pointer"
-                    >
-                      <CheckCircle2 className="w-4 h-4" /> Verifikasi &amp; Terbitkan (Setujui)
-                    </button>
+                    {/* Actions inside Preview */}
+                    <div className="flex justify-end gap-3 pt-3 border-t border-border">
+                      <button
+                        onClick={() => {
+                          handleRejectPending(verifyingMaterial.id, verifyingMaterial.versiId, verifyingMaterial.title);
+                          setVerifyingMaterial(null);
+                        }}
+                        className="bg-muted hover:bg-danger/20 hover:text-danger text-muted-foreground font-bold px-4 py-2 rounded-xl text-xs transition-colors cursor-pointer"
+                      >
+                        Tolak Pengajuan
+                      </button>
+                      <button
+                        onClick={() => {
+                          handleApprovePending(verifyingMaterial.id, verifyingMaterial.versiId, verifyingMaterial.title);
+                          setVerifyingMaterial(null);
+                        }}
+                        className="bg-success text-white font-extrabold px-5 py-2 rounded-xl text-xs flex items-center gap-1 shadow-sm hover:scale-105 transition-all cursor-pointer"
+                      >
+                        <CheckCircle2 className="w-4 h-4" /> Verifikasi &amp; Terbitkan (Setujui)
+                      </button>
+                    </div>
                   </div>
-                </div>
-              )}
+                );
+              })()}
 
               {/* Pending List */}
               {pendingMaterials.length > 0 ? (
@@ -2874,7 +3916,7 @@ Pisahkan tiap soal dengan baris kosong. Jangan pakai markdown (bold/italic), jan
                           onClick={() => setVerifyingMaterial(item)}
                           className="bg-primary/10 text-primary font-extrabold px-3.5 py-2 rounded-xl text-xs flex items-center gap-1 hover:bg-primary/20 transition-all cursor-pointer"
                         >
-                          <Eye className="w-3.5 h-3.5" /> Pratinjau &amp; Bandingkan Versi
+                          <Eye className="w-3.5 h-3.5" /> {Boolean(item.prevVersion?.content) ? 'Pratinjau & Bandingkan Versi' : 'Pratinjau Materi'}
                         </button>
                         <button
                           onClick={() => handleRejectPending(item.id, item.versiId, item.title)}
@@ -2950,6 +3992,7 @@ Pisahkan tiap soal dengan baris kosong. Jangan pakai markdown (bold/italic), jan
                 members={dbMemberList}
                 currentRole={activeRole}
                 isManagementMode={false}
+                isLoading={isLoadingMembers}
               />
             </div>
           )}
@@ -2960,6 +4003,7 @@ Pisahkan tiap soal dengan baris kosong. Jangan pakai markdown (bold/italic), jan
                 members={dbMemberList}
                 currentRole={activeRole}
                 isManagementMode={true}
+                isLoading={isLoadingMembers}
                 onToggleAdmin={handleToggleAdminMember}
                 onKickMember={handleKickMemberItem}
               />
@@ -2986,6 +4030,17 @@ Pisahkan tiap soal dengan baris kosong. Jangan pakai markdown (bold/italic), jan
         confirmText="Ya, Buat Kode Baru"
         cancelText="Batal"
         variant="primary"
+      />
+
+      <ConfirmModal
+        isOpen={confirmModalState.isOpen}
+        onClose={() => setConfirmModalState(prev => ({ ...prev, isOpen: false }))}
+        onConfirm={confirmModalState.onConfirm}
+        title={confirmModalState.title}
+        description={confirmModalState.description}
+        confirmText={confirmModalState.confirmText}
+        cancelText="Batal"
+        variant={confirmModalState.variant}
       />
     </section>
   );

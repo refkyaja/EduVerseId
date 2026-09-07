@@ -28,6 +28,10 @@ class UserResource extends JsonResource
 
         $avatarUrl = $this->profile_photo ? $this->profile_photo : "https://ui-avatars.com/api/?name=" . urlencode($this->name ?? $this->username ?? 'User') . "&background=8b5cf6&color=ffffff&bold=true&size=256";
 
+        $streakDaysCount = $examsCompleted > 0 ? $attempts->pluck('created_at')->map(function($d) {
+            return \Carbon\Carbon::parse($d)->format('Y-m-d');
+        })->unique()->count() : 0;
+
         return [
             'id' => $this->id,
             'name' => $this->name,
@@ -40,7 +44,7 @@ class UserResource extends JsonResource
             'exams_completed' => $examsCompleted,
             'correct_answers' => $correctAnswers,
             'accuracy' => $accuracy,
-            'streak' => 7,
+            'streak' => $streakDaysCount,
             'created_at' => $this->created_at,
             'updated_at' => $this->updated_at,
         ];

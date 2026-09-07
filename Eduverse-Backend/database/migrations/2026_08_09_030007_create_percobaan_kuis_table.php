@@ -18,6 +18,7 @@ return new class extends Migration
             $table->integer('percobaan_ke')->default(1);
             $table->integer('skor')->default(0);
             $table->integer('xp_didapat')->default(0);
+            $table->json('power_up_terpakai')->nullable();
             $table->timestamp('mulai_pada')->nullable();
             $table->timestamp('selesai_pada')->nullable();
             $table->timestamps();

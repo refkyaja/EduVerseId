@@ -6,53 +6,82 @@ import { INITIAL_CLASSES, INITIAL_QUIZZES } from '../data/mockData';
 const AppStateContext = createContext();
 
 const INITIAL_STATE = {
-  xp: 4080,
-  streak: 7,
-  examsCompleted: 44,
-  correctAnswers: 176,
+  xp: 0,
+  streak: 0,
+  examsCompleted: 0,
+  correctAnswers: 0,
+  totalQuestionsAttempted: 0,
+  subjectStats: {},
   powerUps: { hint: 3, shield: 2, freeze: 1, combo: 5 },
-  darkMode: false
+  darkMode: true
 };
 
-export function getLevelInfo(totalXp) {
-  const baseLevel = 25;
-  const baseXP    = 3100;
-  if (totalXp >= baseXP) {
-    const excess      = totalXp - baseXP;
-    const levelOffset = Math.floor(excess / 1000);
-    const level       = baseLevel + levelOffset;
-    const progress    = excess % 1000;
-    return { level, progress, max: 1000 };
+/**
+ * Calculates user Level, XP progress, and max XP for current level.
+ * Level starts at Level 0 (0 XP).
+ * Cost to level up increases progressively (+50 XP per level).
+ * Level 0 -> 1: 100 XP
+ * Level 1 -> 2: 150 XP
+ * Level 2 -> 3: 200 XP ...
+ */
+export function getLevelInfo(totalXp = 0) {
+  let xp = Math.max(0, Number(totalXp) || 0);
+  let level = 0;
+  let costForNextLevel = 100;
+
+  while (xp >= costForNextLevel) {
+    xp -= costForNextLevel;
+    level += 1;
+    costForNextLevel += 50;
   }
-  const level    = Math.floor(totalXp / 150) + 1;
-  const progress = totalXp % 150;
-  return { level, progress, max: 150 };
+
+  const percent = Math.min(100, Math.round((xp / costForNextLevel) * 100));
+
+  return {
+    level,
+    progress: xp,
+    max: costForNextLevel,
+    percent,
+    totalXp: Number(totalXp) || 0
+  };
 }
 
 export function AppStateProvider({ children }) {
-  const [appState, setAppState] = useState(() => {
+  const loadStateForUser = (user) => {
+    if (!user || !user.id) return INITIAL_STATE;
+    const userKey = `eduquest_state_${user.id}`;
     try {
-      const stored = localStorage.getItem('eduquest_state');
+      const stored = localStorage.getItem(userKey);
       if (stored) {
         return { ...INITIAL_STATE, ...JSON.parse(stored) };
       }
     } catch (e) {
-      console.error("Failed to parse stored state:", e);
+      console.error("Failed to parse user state:", e);
     }
-    return INITIAL_STATE;
-  });
+    return {
+      ...INITIAL_STATE,
+      xp: Number(user.xp ?? user.totalXp ?? 0),
+      streak: Number(user.streak ?? 0),
+      examsCompleted: Number(user.exams_completed ?? 0),
+      correctAnswers: 0,
+      totalQuestionsAttempted: 0,
+      subjectStats: {}
+    };
+  };
 
   const [currentUser, setCurrentUser] = useState(() => authService.getStoredUser());
+  const [appState, setAppState] = useState(() => loadStateForUser(currentUser));
   const [toastMessage, setToastMessage] = useState(null);
 
-  // Sync state to localStorage
+  // Sync state to user-scoped localStorage
   useEffect(() => {
     try {
-      localStorage.setItem('eduquest_state', JSON.stringify(appState));
+      const key = currentUser?.id ? `eduquest_state_${currentUser.id}` : 'eduquest_state';
+      localStorage.setItem(key, JSON.stringify(appState));
     } catch (e) {
       console.error("Failed to save state:", e);
     }
-  }, [appState]);
+  }, [appState, currentUser?.id]);
 
   // Sync dark mode class to html element
   useEffect(() => {
@@ -68,7 +97,10 @@ export function AppStateProvider({ children }) {
     if (authService.getToken()) {
       authService.getProfile()
         .then(user => {
-          setCurrentUser(user);
+          if (user) {
+            setCurrentUser(user);
+            setAppState(loadStateForUser(user));
+          }
         })
         .catch(err => {
           console.warn('Auto profile fetch failed:', err);
@@ -76,16 +108,20 @@ export function AppStateProvider({ children }) {
       fetchUserClasses();
     } else {
       setClassList([]);
+      setAppState(INITIAL_STATE);
     }
   }, []);
 
   const [classList, setClassList] = useState([]);
+  const [isLoadingClasses, setIsLoadingClasses] = useState(Boolean(authService.getToken()));
 
   const fetchUserClasses = async () => {
     if (!authService.getToken()) {
       setClassList([]);
+      setIsLoadingClasses(false);
       return [];
     }
+    setIsLoadingClasses(true);
     try {
       const classes = await apiService.getClasses();
       setClassList(classes);
@@ -94,6 +130,8 @@ export function AppStateProvider({ children }) {
       console.warn("Failed to fetch user classes from API:", e);
       setClassList([]);
       return [];
+    } finally {
+      setIsLoadingClasses(false);
     }
   };
 
@@ -108,19 +146,55 @@ export function AppStateProvider({ children }) {
     }, 2300);
   };
 
-  const recordExamResult = (earnedXp, correctCount, totalQuestions) => {
-    setAppState(prev => ({
-      ...prev,
-      xp: prev.xp + earnedXp,
-      examsCompleted: prev.examsCompleted + 1,
-      correctAnswers: prev.correctAnswers + correctCount,
-    }));
+  const recordExamResult = (earnedXp = 0, correctCount = 0, totalQuestions = 0, subjectCode = 'UMUM', classId = null) => {
+    if (classId) {
+      addClassXp(classId, earnedXp);
+    }
+    setAppState(prev => {
+      const prevTotalQ = prev.totalQuestionsAttempted || (prev.correctAnswers ? prev.correctAnswers : 0);
+      const newTotalQ = prevTotalQ + (totalQuestions || 0);
+      const newCorrect = (prev.correctAnswers || 0) + (correctCount || 0);
+      const newXp = (prev.xp || 0) + (earnedXp || 0);
+      const newExams = (prev.examsCompleted || 0) + 1;
+      const newStreak = (prev.streak || 0) + 1;
+
+      const sCode = (subjectCode || 'UMUM').toUpperCase();
+      const currentSub = prev.subjectStats?.[sCode] || { correct: 0, total: 0 };
+      const updatedSub = {
+        ...(prev.subjectStats || {}),
+        [sCode]: {
+          correct: currentSub.correct + (correctCount || 0),
+          total: currentSub.total + (totalQuestions || 0)
+        }
+      };
+
+      return {
+        ...prev,
+        xp: newXp,
+        examsCompleted: newExams,
+        correctAnswers: newCorrect,
+        totalQuestionsAttempted: newTotalQ,
+        subjectStats: updatedSub,
+        streak: newStreak
+      };
+    });
+
+    setCurrentUser(prev => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        xp: (prev.xp || 0) + earnedXp,
+        exams_completed: (prev.exams_completed || 0) + 1,
+        streak: (prev.streak || 0) + 1,
+      };
+    });
   };
 
   const loginUser = async (credentials) => {
     const res = await authService.login(credentials);
     if (res.data?.user) {
       setCurrentUser(res.data.user);
+      setAppState(loadStateForUser(res.data.user));
       await fetchUserClasses();
       showToast(`Selamat datang kembali, ${res.data.user.name}!`);
     }
@@ -131,6 +205,7 @@ export function AppStateProvider({ children }) {
     const res = await authService.register(data);
     if (res.data?.user) {
       setCurrentUser(res.data.user);
+      setAppState(loadStateForUser(res.data.user));
       await fetchUserClasses();
       showToast(`Akun ${res.data.user.name} berhasil terdaftar di database!`);
     }
@@ -175,8 +250,11 @@ export function AppStateProvider({ children }) {
   });
 
   const getClassXp = (classId) => {
-    if (!classId) return 0;
-    return classXpMap[classId] ?? 0;
+    if (!classId) return currentUser?.xp || appState?.xp || 0;
+    if (classXpMap[classId] !== undefined) {
+      return classXpMap[classId];
+    }
+    return currentUser?.xp || appState?.xp || 0;
   };
 
   const addClassXp = (classId, amount) => {
@@ -262,6 +340,21 @@ export function AppStateProvider({ children }) {
     });
   };
 
+  const updateMateriInState = (materiId, updatedFields) => {
+    setMateriList(prev => {
+      const updated = prev.map(m => {
+        if (String(m.id) === String(materiId)) {
+          return { ...m, ...updatedFields };
+        }
+        return m;
+      });
+      try {
+        localStorage.setItem('eduverse_materi', JSON.stringify(updated));
+      } catch (e) {}
+      return updated;
+    });
+  };
+
   const [quizList, setQuizList] = useState(() => {
     try {
       const stored = localStorage.getItem('eduverse_quizzes');
@@ -287,12 +380,14 @@ export function AppStateProvider({ children }) {
       currentUser,
       setCurrentUser,
       classList,
+      isLoadingClasses,
       fetchUserClasses,
       registerClass,
       findClass,
       updateClassInfo,
       materiList,
       addMateri,
+      updateMateriInState,
       quizList,
       addQuiz,
       classXpMap,

@@ -45,9 +45,14 @@ export default function QuizCard({ quiz, classId }) {
   const charSum = (quiz.title || '').split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
   const bgGradient = GRADIENTS[charSum % GRADIENTS.length];
 
+  const effectiveClassId = classId || quiz.classId;
+  const playUrl = effectiveClassId
+    ? `/quiz/play?quizId=${quiz.id}&classId=${effectiveClassId}`
+    : `/quiz/play?quizId=${quiz.id}`;
+
   return (
     <Link
-      to={`/quiz/play?quizId=${quiz.id}`}
+      to={playUrl}
       className="group bg-card border border-border hover:border-primary/50 rounded-2xl p-4 shadow-sm hover:shadow-md transition-all text-left flex items-center justify-between cursor-pointer w-full"
     >
       <div className="flex items-center gap-3 min-w-0">

@@ -47,13 +47,17 @@ Route::middleware('auth:sanctum')->group(function () {
     // Mapel (Mata Pelajaran) API
     Route::get('/classes/{id}/mapel', [MapelController::class, 'index']);
     Route::post('/classes/{id}/mapel', [MapelController::class, 'store']);
+    Route::put('/classes/{id}/mapel/{mapelId}', [MapelController::class, 'update']);
+    Route::delete('/classes/{id}/mapel/{mapelId}', [MapelController::class, 'destroy']);
 
     // Materi API
     Route::get('/classes/{id}/materi', [MateriController::class, 'index']);
     Route::post('/classes/{id}/materi', [MateriController::class, 'store']);
     Route::get('/classes/{id}/materi/{materiId}', [MateriController::class, 'show']);
     Route::put('/classes/{id}/materi/{materiId}', [MateriController::class, 'update']);
+    Route::delete('/classes/{id}/materi/{materiId}', [MateriController::class, 'destroy']);
     Route::post('/classes/{id}/materi-versi/{versiId}/verify', [MateriController::class, 'verifyVersion']);
+    Route::delete('/classes/{id}/materi-versi/{versiId}', [MateriController::class, 'deleteVersion']);
 
     // Bank Soal API
     Route::get('/classes/{id}/soal', [SoalController::class, 'index']);
@@ -65,6 +69,8 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/classes/{id}/kuis', [KuisController::class, 'index']);
     Route::post('/classes/{id}/kuis', [KuisController::class, 'store']);
     Route::get('/classes/{id}/kuis/{kuisId}', [KuisController::class, 'show']);
+    Route::put('/classes/{id}/kuis/{kuisId}', [KuisController::class, 'update']);
+    Route::delete('/classes/{id}/kuis/{kuisId}', [KuisController::class, 'destroy']);
     Route::post('/classes/{id}/kuis/{kuisId}/submit', [KuisController::class, 'submitAttempt']);
 
     // Leaderboard XP API

@@ -1,22 +1,44 @@
-import React, { useState } from 'react';
-import { Swords, Plus, Sparkles, HelpCircle } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Swords, Plus, Sparkles, HelpCircle, Loader2 } from 'lucide-react';
 import QuizCard from '../components/QuizCard';
 import { useAppState } from '../context/AppStateContext';
+import { apiService } from '../services/apiService';
 
 export default function ClassKuisPage({ cls, quizzes, currentRole, onCreateQuiz }) {
   const { showToast } = useAppState();
   const [isCreating, setIsCreating] = useState(false);
   const [title, setTitle] = useState('');
   const [timeLimit, setTimeLimit] = useState(30);
+  const [apiQuizzes, setApiQuizzes] = useState([]);
+  const [loading, setLoading] = useState(false);
 
   const canCreate = currentRole === 'owner' || currentRole === 'admin';
-  const classQuizzes = quizzes?.filter(q => q.classId === cls?.id) || quizzes || [];
 
-  const handleCreateSubmit = (e) => {
+  const fetchQuizzes = async () => {
+    if (cls?.id) {
+      try {
+        setLoading(true);
+        const data = await apiService.getKuis(cls.id);
+        if (Array.isArray(data)) {
+          setApiQuizzes(data);
+        }
+      } catch (err) {
+        console.warn("Failed to fetch kuis from API:", err);
+      } finally {
+        setLoading(false);
+      }
+    }
+  };
+
+  useEffect(() => {
+    fetchQuizzes();
+  }, [cls?.id]);
+
+  const handleCreateSubmit = async (e) => {
     e.preventDefault();
     if (!title.trim()) return;
 
-    onCreateQuiz({
+    const quizData = {
       title: title.trim(),
       timeLimit: Number(timeLimit) || 30,
       questionsCount: 5,
@@ -35,12 +57,47 @@ export default function ClassKuisPage({ cls, quizzes, currentRole, onCreateQuiz 
           hint: "Jawaban adalah opsi C.",
         },
       ],
-    });
+    };
 
-    showToast(`Kuis "${title}" berhasil dibuat!`);
+    try {
+      if (cls?.id) {
+        await apiService.createKuis(cls.id, {
+          judul: title.trim(),
+          deskripsi: `Kuis ${title.trim()}`,
+          batas_waktu: Number(timeLimit) || 30,
+        });
+        await fetchQuizzes();
+      }
+    } catch (err) {
+      console.warn("API createKuis fallback:", err);
+    }
+
+    if (onCreateQuiz) {
+      onCreateQuiz(quizData);
+    }
+
+    showToast(`Kuis "${title}" berhasil diterbitkan!`);
     setTitle('');
     setIsCreating(false);
   };
+
+  const formattedApiQuizzes = apiQuizzes.map(q => ({
+    id: q.id,
+    classId: cls?.id,
+    title: q.judul || q.title,
+    timeLimit: q.batas_waktu || 30,
+    questionsCount: q.soal_count || q.jumlah_soal || 5,
+    attemptsCount: 0,
+  }));
+
+  const localQuizzes = quizzes?.filter(q => String(q.classId) === String(cls?.id)) || [];
+  
+  const classQuizzes = [...formattedApiQuizzes];
+  localQuizzes.forEach(lq => {
+    if (!classQuizzes.some(aq => String(aq.id) === String(lq.id))) {
+      classQuizzes.push(lq);
+    }
+  });
 
   return (
     <div className="space-y-6">
@@ -116,17 +173,22 @@ export default function ClassKuisPage({ cls, quizzes, currentRole, onCreateQuiz 
       {/* Quizzes List */}
       <div className="space-y-4">
         <h3 className="font-extrabold text-lg italic flex items-center gap-2">
-          <Swords className="w-5 h-5 text-primary" /> Daftar Kuis & Ujian Kelas
+          <Swords className="w-5 h-5 text-primary" /> Daftar Kuis &amp; Ujian Kelas
         </h3>
 
-        {classQuizzes.length > 0 ? (
+        {loading ? (
+          <div className="flex flex-col items-center justify-center py-12 gap-2 bg-card border border-border rounded-3xl">
+            <Loader2 className="w-6 h-6 text-primary animate-spin" />
+            <span className="text-xs text-muted-foreground font-bold">Memuat kuis...</span>
+          </div>
+        ) : classQuizzes.length > 0 ? (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {classQuizzes.map((quiz) => (
               <QuizCard key={quiz.id} quiz={quiz} classId={cls.id} />
             ))}
           </div>
         ) : (
-          <div className="bg-card border border-border rounded-3xl p-8 text-center text-muted-foreground text-xs">
+          <div className="bg-card border border-border rounded-3xl p-8 text-center text-muted-foreground text-xs font-bold">
             Belum ada kuis di kelas ini.
           </div>
         )}
@@ -134,3 +196,4 @@ export default function ClassKuisPage({ cls, quizzes, currentRole, onCreateQuiz 
     </div>
   );
 }
+

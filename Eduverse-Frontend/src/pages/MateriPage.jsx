@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { ChevronRight, FileText, Plus, BookOpen, Library, BookOpenCheck, ShieldAlert } from 'lucide-react';
+import { ChevronRight, ChevronDown, FileText, Plus, BookOpen, Library, BookOpenCheck, ShieldAlert, Loader2, Search } from 'lucide-react';
 import MateriModal from '../components/MateriModal';
 import VerificationBadge from '../components/VerificationBadge';
 import MaterialVersionDropdown from '../components/MaterialVersionDropdown';
@@ -9,32 +9,45 @@ import { apiService } from '../services/apiService';
 
 export default function MateriPage({ currentRole }) {
   const { classId } = useParams();
-  const { findClass, materiList, currentUser } = useAppState();
+  const { findClass, materiList, currentUser, isLoadingClasses } = useAppState();
   const [selectedMateriId, setSelectedMateriId] = useState(null);
   const [apiMaterials, setApiMaterials] = useState([]);
+  const [dbMapelList, setDbMapelList] = useState([]);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedMapelFilter, setSelectedMapelFilter] = useState('ALL');
+  const [isLoading, setIsLoading] = useState(Boolean(classId));
 
   const activeClass = classId && findClass ? findClass(classId) : null;
   const isApiClass = Boolean(classId && !String(classId).startsWith('cls-') && !isNaN(Number(classId)));
-  const userRole = String(currentRole || activeClass?.role || currentUser?.activeRole || 'member').toLowerCase();
+
+  const getRole = () => {
+    if (currentRole) return String(currentRole).toLowerCase();
+    if (activeClass?.role) return String(activeClass.role).toLowerCase();
+    if (isApiClass && isLoadingClasses) return null;
+    if (currentUser?.activeRole) return String(currentUser.activeRole).toLowerCase();
+    if (currentUser?.role && currentUser.role !== 'user') return String(currentUser.role).toLowerCase();
+    if (!isLoadingClasses && isApiClass && !activeClass) return 'member';
+    return 'member';
+  };
+
+  const userRole = getRole();
+  const isRoleLoading = userRole === null;
   const canManage = userRole === 'owner' || userRole === 'admin';
 
   useEffect(() => {
     if (isApiClass && classId) {
-      apiService.getMateri(classId).then(data => {
-        if (Array.isArray(data)) {
-          setApiMaterials(data.map(item => ({
-            id: item.id,
-            classId: classId,
-            subject: item.mapel?.kode || 'MATERI',
-            subjectName: item.mapel?.nama || 'Mata Pelajaran',
-            title: item.judul,
-            content: item.isi || item.versi_aktif?.isi || '',
-            num: '01',
-            status: item.versi_aktif?.status || 'verified',
-            version: item.versi_aktif?.versi || 1
-          })));
-        }
-      }).catch(() => {});
+      setIsLoading(true);
+      Promise.all([
+        apiService.getMapel(classId).catch(() => []),
+        apiService.getMateri(classId).catch(() => [])
+      ]).then(([mapels, materis]) => {
+        if (Array.isArray(mapels)) setDbMapelList(mapels);
+        if (Array.isArray(materis)) setApiMaterials(materis);
+      }).finally(() => {
+        setIsLoading(false);
+      });
+    } else {
+      setIsLoading(false);
     }
   }, [isApiClass, classId]);
 
@@ -64,19 +77,78 @@ export default function MateriPage({ currentRole }) {
   }
 
   // Filter materials for current class or global + combine API materials
-  const localFiltered = (materiList || []).filter(m => {
+  const localFiltered = isApiClass ? [] : (materiList || []).filter(m => {
     if (!classId) return true;
     return m.classId === classId || m.classId === 'global';
   });
-  const filteredMaterials = [...apiMaterials, ...localFiltered];
+
+  const formattedApiMaterials = apiMaterials.map(item => {
+    const mapelObj = (dbMapelList || []).find(
+      mp => String(mp.id) === String(item.mapel_id) || mp.kode === item.mapel_id || String(mp.id) === String(item.mapel?.id)
+    ) || item.mapel;
+
+    const rawKode = item.mapel?.kode || mapelObj?.kode || (typeof item.subject === 'string' && isNaN(Number(item.subject)) ? item.subject : null);
+    const rawNama = item.mapel?.nama || mapelObj?.nama || item.subjectName;
+
+    const cleanKode = (rawKode || 'UMUM').toUpperCase();
+    const cleanNama = (rawNama && rawNama !== 'Mata Pelajaran' && rawNama !== cleanKode) ? rawNama : (cleanKode !== 'UMUM' ? cleanKode : 'Materi Umum');
+
+    const rawStatus = item.versi_aktif?.status || (item.versi && item.versi.length > 0 ? item.versi[item.versi.length - 1].status : (item.status || 'menunggu_verifikasi'));
+
+    return {
+      id: item.id,
+      classId: classId,
+      subject: cleanKode,
+      subjectName: cleanNama,
+      title: item.judul || item.title,
+      content: item.isi || item.versi_aktif?.isi || item.content || '',
+      num: '01',
+      status: rawStatus,
+      version: item.versi_aktif?.nomor_versi || item.versi_aktif?.versi || item.version || 1,
+      versi: item.versi || item.versions || [],
+      versions: item.versi || item.versions || []
+    };
+  });
+
+  const rawMaterials = isApiClass ? formattedApiMaterials : [...formattedApiMaterials, ...localFiltered];
+
+  const filteredMaterials = rawMaterials.filter(m => {
+    const isVerified = m.status === 'terverifikasi' || m.status === 'verified' || m.status === 'Terverifikasi';
+    if (!isVerified) return false;
+
+    const matchesMapel = selectedMapelFilter === 'ALL' || m.subject === selectedMapelFilter;
+    const qLower = searchQuery.trim().toLowerCase();
+    const matchesSearch = !qLower ||
+      m.title?.toLowerCase().includes(qLower) ||
+      m.subjectName?.toLowerCase().includes(qLower) ||
+      m.subject?.toLowerCase().includes(qLower);
+    return matchesMapel && matchesSearch;
+  });
+
+  const allMapelOptions = dbMapelList.length > 0
+    ? dbMapelList
+    : Array.from(new Set(rawMaterials.map(m => m.subject).filter(Boolean))).map(subj => ({
+        id: subj,
+        kode: subj,
+        nama: subj
+      }));
 
   const subjectsMap = {};
   filteredMaterials.forEach((m) => {
-    const code = (m.subject || m.code || 'MATERI').toUpperCase();
+    const mapelObj = (dbMapelList || []).find(
+      mp => String(mp.id) === String(m.subject) || mp.kode === m.subject || String(mp.id) === String(m.mapel_id)
+    ) || dbMapelList[0];
+
+    const rawKode = mapelObj?.kode || (isNaN(Number(m.subject)) && m.subject !== 'UMUM' ? m.subject : null) || 'MAPEL';
+    const rawNama = mapelObj?.nama || (m.subjectName && isNaN(Number(m.subjectName)) && m.subjectName !== 'Mata Pelajaran' && m.subjectName !== 'Materi Umum' ? m.subjectName : null) || rawKode;
+
+    const code = rawKode.toUpperCase();
+    const name = rawNama;
+
     if (!subjectsMap[code]) {
       subjectsMap[code] = {
         code: code,
-        name: m.subjectName || m.subject || code,
+        name: name,
         gradient: 'from-indigo-500 to-purple-600',
         chapters: []
       };
@@ -94,7 +166,7 @@ export default function MateriPage({ currentRole }) {
 
   const subjects = Object.values(subjectsMap);
   const totalMaterials = subjects.reduce((acc, s) => acc + (s.chapters?.length || 0), 0);
-  const selectedMateriObj = filteredMaterials.find(m => m.id === selectedMateriId) || null;
+  const selectedMateriObj = rawMaterials.find(m => m.id === selectedMateriId) || null;
 
   return (
     <section className="px-4 md:px-8 pt-6 space-y-6 animate-fade-in flex flex-col max-w-7xl mx-auto w-full pb-24">
@@ -135,8 +207,54 @@ export default function MateriPage({ currentRole }) {
         </div>
       </div>
 
-      {/* Subject Chapters with Verification Badges & Version Dropdown or Empty State */}
-      {subjects.length > 0 ? (
+      {/* Search & Filter Bar */}
+      <div className="bg-card border border-border rounded-2xl md:rounded-3xl p-3.5 sm:p-4 shadow-sm flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+        {/* Search Input */}
+        <div className="relative flex-1 min-w-0">
+          <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+          <input
+            type="text"
+            placeholder="Cari materi pembelajaran..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="w-full pl-10 pr-8 py-2 bg-background border border-border rounded-xl text-xs font-bold text-foreground focus:outline-none focus:border-primary transition-all h-[42px]"
+          />
+          {searchQuery && (
+            <button
+              onClick={() => setSearchQuery('')}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground hover:text-foreground font-extrabold cursor-pointer"
+            >
+              ✕
+            </button>
+          )}
+        </div>
+
+        {/* Filter Mapel Dropdown */}
+        <div className="relative bg-background border border-border rounded-xl px-3 text-xs font-bold flex items-center h-[42px] shadow-xs shrink-0 max-w-[160px] sm:max-w-none">
+          <select
+            value={selectedMapelFilter}
+            onChange={(e) => setSelectedMapelFilter(e.target.value)}
+            className="bg-transparent appearance-none text-foreground font-bold text-xs focus:outline-none cursor-pointer pr-6 truncate w-full"
+          >
+            <option value="ALL" className="bg-card text-foreground font-normal text-xs">Semua Mapel</option>
+            {allMapelOptions.map(m => (
+              <option key={m.id || m.kode} value={m.kode} className="bg-card text-foreground font-normal text-xs">
+                {m.kode} - {m.nama}
+              </option>
+            ))}
+          </select>
+          <ChevronDown className="w-3.5 h-3.5 text-muted-foreground pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2" />
+        </div>
+      </div>
+
+      {/* Subject Chapters with Verification Badges & Version Dropdown or Loading / Empty State */}
+      {isLoading ? (
+        <div className="bg-card rounded-3xl p-12 text-center space-y-3 shadow-sm border border-border flex flex-col items-center justify-center animate-pulse">
+          <Loader2 className="w-9 h-9 text-primary animate-spin" />
+          <h3 className="font-extrabold text-sm text-foreground">Memuat Materi Kelas...</h3>
+          <p className="text-xs text-muted-foreground">Mohon tunggu sebentar, sedang mengambil data materi pembelajaran.</p>
+        </div>
+      ) : subjects.length > 0 ? (
         <div className="space-y-8">
           {subjects.map(s => (
             <section key={s.code} className="space-y-3">
@@ -149,37 +267,28 @@ export default function MateriPage({ currentRole }) {
 
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
                 {s.chapters.map((ch, idx) => (
-                  <div
+                  <button
                     key={ch.id || idx}
-                    className="bg-card border border-border rounded-2xl p-4 shadow-sm hover:border-primary/30 transition-all flex flex-col justify-between gap-3"
+                    type="button"
+                    onClick={() => setSelectedMateriId(ch.id)}
+                    className="w-full text-left bg-card border border-border rounded-2xl p-4 flex items-center gap-3.5 hover:border-primary/40 hover:shadow-md transition-all active:scale-[0.98] cursor-pointer group"
                   >
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="flex items-center gap-3 min-w-0">
-                        <div className="w-9 h-9 rounded-lg bg-muted grid place-items-center text-xs font-extrabold text-muted-foreground shrink-0">
-                          {ch.num}
-                        </div>
-                        <div className="min-w-0">
-                          <h4 className="font-bold text-xs truncate">{ch.title}</h4>
-                          <p className="text-[10px] text-muted-foreground">{ch.desc}</p>
-                        </div>
+                    <div className="w-9 h-9 rounded-lg bg-muted grid place-items-center text-xs font-extrabold text-muted-foreground shrink-0">
+                      {ch.num}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <p className="font-bold text-sm text-foreground truncate">{ch.title}</p>
+                        {ch.version && ch.version > 1 && (
+                          <span className="bg-primary/10 text-primary text-[9px] font-extrabold px-2 py-0.5 rounded-full border border-primary/20 shrink-0">
+                            v{ch.version}
+                          </span>
+                        )}
                       </div>
-                      <VerificationBadge status={ch.status || 'verified'} />
+                      <p className="text-xs text-muted-foreground truncate">{ch.desc || 'Ringkasan · Materi'}</p>
                     </div>
-
-                    <div className="flex items-center justify-between pt-2 border-t border-border/50 text-[10px]">
-                      <MaterialVersionDropdown
-                        versions={[{ version: ch.version || 1, updatedAt: 'Terbaru', updatedBy: 'Owner', status: ch.status }]}
-                        activeVersion={ch.version || 1}
-                        onSelectVersion={() => {}}
-                      />
-                      <button
-                        onClick={() => setSelectedMateriId(ch.id)}
-                        className="text-primary font-bold hover:underline flex items-center gap-1 cursor-pointer"
-                      >
-                        Buka Materi <ChevronRight className="w-3 h-3" />
-                      </button>
-                    </div>
-                  </div>
+                    <ChevronRight className="w-4 h-4 text-muted-foreground group-hover:text-primary transition-colors shrink-0" />
+                  </button>
                 ))}
               </div>
             </section>
@@ -188,20 +297,36 @@ export default function MateriPage({ currentRole }) {
       ) : (
         <div className="bg-card rounded-3xl p-10 text-center space-y-3 shadow-sm border border-border">
           <BookOpen className="w-12 h-12 text-muted-foreground mx-auto" />
-          <h3 className="font-extrabold text-lg">Belum Ada Materi Pelajaran</h3>
+          <h3 className="font-extrabold text-lg">
+            {(searchQuery || selectedMapelFilter !== 'ALL') ? 'Materi Tidak Ditemukan' : 'Belum Ada Materi Pelajaran'}
+          </h3>
           <p className="text-xs text-muted-foreground max-w-sm mx-auto">
-            Owner atau Admin belum menambahkan materi pelajaran untuk kelas ini.
+            {(searchQuery || selectedMapelFilter !== 'ALL')
+              ? `Tidak ada materi yang sesuai dengan pencarian "${searchQuery}" atau filter yang dipilih.`
+              : 'Owner atau Admin belum menambahkan materi pelajaran untuk kelas ini.'
+            }
           </p>
-          {canManage && (
+          {(searchQuery || selectedMapelFilter !== 'ALL') ? (
             <div className="pt-2">
-              <Link
-                to={classId ? `/class/${classId}/profile` : "/profile"}
-                className="inline-flex items-center gap-2 px-5 py-2.5 bg-primary text-primary-foreground font-extrabold text-xs rounded-2xl shadow-glow hover:scale-105 transition-all"
+              <button
+                onClick={() => { setSearchQuery(''); setSelectedMapelFilter('ALL'); }}
+                className="inline-flex items-center gap-2 px-5 py-2.5 bg-primary text-primary-foreground font-extrabold text-xs rounded-2xl shadow-glow hover:scale-105 transition-all cursor-pointer"
               >
-                <span>Kelola &amp; Tambah Materi</span>
-                <ChevronRight className="w-4 h-4" />
-              </Link>
+                <span>Reset Filter &amp; Pencarian</span>
+              </button>
             </div>
+          ) : (
+            canManage && (
+              <div className="pt-2">
+                <Link
+                  to={classId ? `/class/${classId}/profile` : "/profile"}
+                  className="inline-flex items-center gap-2 px-5 py-2.5 bg-primary text-primary-foreground font-extrabold text-xs rounded-2xl shadow-glow hover:scale-105 transition-all"
+                >
+                  <span>Kelola &amp; Tambah Materi</span>
+                  <ChevronRight className="w-4 h-4" />
+                </Link>
+              </div>
+            )
           )}
         </div>
       )}

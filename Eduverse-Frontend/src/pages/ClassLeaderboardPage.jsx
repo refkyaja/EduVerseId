@@ -6,7 +6,7 @@ export default function ClassLeaderboardPage({ leaderboardData }) {
   const { appState } = useAppState();
 
   const data = leaderboardData || [
-    { rank: 1, name: "Refky Satria (Kamu)", xp: appState.xp || 3950, role: "Owner", isCurrentUser: true },
+    { rank: 1, name: "Refky Satria (Kamu)", xp: appState.xp || 0, role: "Owner", isCurrentUser: true },
     { rank: 2, name: "Budi Santoso", xp: 3420, role: "Admin", isCurrentUser: false },
     { rank: 3, name: "Siti Rahma", xp: 2980, role: "Member", isCurrentUser: false },
     { rank: 4, name: "Andi Wijaya", xp: 2650, role: "Member", isCurrentUser: false },

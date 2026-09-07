@@ -16,7 +16,7 @@ export default function TopBar() {
   const classId = classMatch ? classMatch[1] : null;
   const isInsideClass = Boolean(classId);
   const activeClass = classId && findClass ? findClass(classId) : null;
-  const classXp = isInsideClass && getClassXp ? getClassXp(classId) : 0;
+  const classXp = isInsideClass && getClassXp ? (getClassXp(classId) || currentUser?.xp || appState?.xp || 0) : 0;
   const userName = currentUser?.name || currentUser?.username || 'User';
   const hasCustomPhoto = (currentUser?.profile_photo || currentUser?.avatar) && 
                          !String(currentUser?.profile_photo || currentUser?.avatar).includes('unsplash');

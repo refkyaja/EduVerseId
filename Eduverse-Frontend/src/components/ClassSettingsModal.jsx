@@ -2,12 +2,16 @@ import React, { useState } from 'react';
 import { createPortal } from 'react-dom';
 import { X, Settings, RefreshCcw, Save, Trash2, ShieldAlert, KeyRound } from 'lucide-react';
 import { useAppState } from '../context/AppStateContext';
+import ConfirmModal from './ConfirmModal';
 
 export default function ClassSettingsModal({ isOpen, onClose, cls, currentRole, onUpdateClassInfo, onRegenerateCode, onDeleteClass }) {
   const { showToast } = useAppState();
   const [name, setName] = useState(cls?.name || 'XI RPL 1');
   const [description, setDescription] = useState(cls?.description || '');
   const [code, setCode] = useState(cls?.code || 'RPL101');
+
+  const [isRegenOpen, setIsRegenOpen] = useState(false);
+  const [isDeleteOpen, setIsDeleteOpen] = useState(false);
 
   if (!isOpen || !cls) return null;
 
@@ -20,21 +24,17 @@ export default function ClassSettingsModal({ isOpen, onClose, cls, currentRole, 
     onClose();
   };
 
-  const handleRegenCode = () => {
-    if (confirm("Apakah Anda yakin ingin membuat ulang kode kelas? Kode lama tidak akan berlaku lagi.")) {
-      const newCode = onRegenerateCode?.(cls.id) || Math.random().toString(36).substring(2, 8).toUpperCase();
-      setCode(newCode);
-      showToast(`Kode kelas baru dibuat: "${newCode}"`);
-    }
+  const executeRegenCode = () => {
+    const newCode = onRegenerateCode?.(cls.id) || Math.random().toString(36).substring(2, 8).toUpperCase();
+    setCode(newCode);
+    showToast(`Kode kelas baru dibuat: "${newCode}"`);
   };
 
-  const handleDelete = () => {
-    if (confirm(`PERINGATAN: Apakah Anda yakin ingin menghapus kelas "${cls.name}" secara permanen? Seluruh data kelas akan dihapus.`)) {
-      onDeleteClass?.(cls.id);
-      showToast(`Kelas "${cls.name}" telah dihapus.`);
-      onClose();
-      window.location.href = '/';
-    }
+  const executeDeleteClass = () => {
+    onDeleteClass?.(cls.id);
+    showToast(`Kelas "${cls.name}" telah dihapus.`);
+    onClose();
+    window.location.href = '/';
   };
 
   return createPortal(
@@ -101,8 +101,8 @@ export default function ClassSettingsModal({ isOpen, onClose, cls, currentRole, 
               {isOwner && (
                 <button
                   type="button"
-                  onClick={handleRegenCode}
-                  className="bg-primary/10 text-primary font-extrabold px-3 py-2 rounded-xl text-xs flex items-center gap-1 hover:bg-primary/20 transition-all"
+                  onClick={() => setIsRegenOpen(true)}
+                  className="bg-primary/10 text-primary font-extrabold px-3 py-2 rounded-xl text-xs flex items-center gap-1 hover:bg-primary/20 transition-all cursor-pointer"
                 >
                   <RefreshCcw className="w-3.5 h-3.5" /> Regenerate Kode
                 </button>
@@ -119,8 +119,8 @@ export default function ClassSettingsModal({ isOpen, onClose, cls, currentRole, 
               <p className="text-xs text-muted-foreground">Menghapus kelas akan menghapus seluruh materi, kuis, dan data anggota secara permanen.</p>
               <button
                 type="button"
-                onClick={handleDelete}
-                className="bg-danger text-white font-extrabold px-4 py-2 rounded-xl text-xs flex items-center gap-1.5 shadow-sm hover:bg-danger/90 transition-all"
+                onClick={() => setIsDeleteOpen(true)}
+                className="bg-danger text-white font-extrabold px-4 py-2 rounded-xl text-xs flex items-center gap-1.5 shadow-sm hover:bg-danger/90 transition-all cursor-pointer"
               >
                 <Trash2 className="w-4 h-4" /> Hapus Kelas Ini Permanen
               </button>
@@ -128,6 +128,28 @@ export default function ClassSettingsModal({ isOpen, onClose, cls, currentRole, 
           )}
         </form>
       </div>
+
+      <ConfirmModal
+        isOpen={isRegenOpen}
+        onClose={() => setIsRegenOpen(false)}
+        onConfirm={executeRegenCode}
+        title="Buat Ulang Kode Kelas?"
+        description="Apakah Anda yakin ingin membuat ulang kode kelas? Kode lama tidak akan berlaku lagi untuk siswa yang ingin bergabung."
+        confirmText="Ya, Buat Kode Baru"
+        cancelText="Batal"
+        variant="primary"
+      />
+
+      <ConfirmModal
+        isOpen={isDeleteOpen}
+        onClose={() => setIsDeleteOpen(false)}
+        onConfirm={executeDeleteClass}
+        title="Hapus Kelas Permanen?"
+        description={`PERINGATAN: Apakah Anda yakin ingin menghapus kelas "${cls?.name}" secara permanen? Seluruh data kelas akan dihapus.`}
+        confirmText="Ya, Hapus Kelas"
+        cancelText="Batal"
+        variant="danger"
+      />
     </div>,
     document.body
   );
