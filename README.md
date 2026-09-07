@@ -1,247 +1,316 @@
-# EduVerse
+# 🌌 EduVerse
 
-Platform belajar berbasis kelas — pengguna bisa bikin kelas sendiri, mengundang orang lain lewat kode kelas, menambahkan materi, membuat soal dan kuis, lalu belajar bersama. Tidak berfokus pada sekolah atau guru tertentu; pengelolaan isi kelas jadi tanggung jawab pengguna di dalam kelas itu sendiri. Dibangun dengan arsitektur terpisah: React (frontend) mengonsumsi REST API dari Laravel (backend), autentikasi pakai Laravel Sanctum, database MySQL.
+<p align="center">
+  <img src="https://raw.githubusercontent.com/lucide-icons/lucide/main/icons/graduation-cap.svg" width="80" height="80" alt="EduVerse Logo" />
+</p>
 
-## ATURAN PENULISAN KODE (WAJIB DIPATUHI)
+<p align="center">
+  <b>Platform Pembelajaran Berbasis Kelas Mandiri & Gamifikasi Kuis Interaktif</b>
+</p>
 
-### Gaya Kode
+<p align="center">
+  <img src="https://img.shields.io/badge/React-18%2F19-61DAFB?style=for-the-badge&logo=react&logoColor=black" alt="React" />
+  <img src="https://img.shields.io/badge/Vite-6.x-646CFF?style=for-the-badge&logo=vite&logoColor=white" alt="Vite" />
+  <img src="https://img.shields.io/badge/Laravel-11%2F12-FF2D20?style=for-the-badge&logo=laravel&logoColor=white" alt="Laravel" />
+  <img src="https://img.shields.io/badge/Sanctum-Auth-F55247?style=for-the-badge&logo=laravel&logoColor=white" alt="Sanctum" />
+  <img src="https://img.shields.io/badge/MySQL-8.0-4479A1?style=for-the-badge&logo=mysql&logoColor=white" alt="MySQL" />
+  <img src="https://img.shields.io/badge/License-MIT-green?style=for-the-badge" alt="License" />
+</p>
 
-1. Hindari komentar di dalam kode. Tidak ada `//`, tidak ada `/* */`, tidak ada JSDoc, buat hal yang udah jelas dari nama variabel/fungsinya sendiri.
-2. Kode harus sederhana. Tidak boleh ada abstraksi berlebihan, design pattern, class helper, atau package tambahan yang gak perlu.
-3. Hindari sintaks yang terlihat aneh atau canggih: destructuring bertingkat, optional chaining bertumpuk, ternary bersarang, arrow function di dalam arrow function, reduce, IIFE, regex rumit. Pakai `if`, `for`, dan `function` biasa.
-4. Yang penting jalan dan tidak error. Utamakan kode yang lurus dan mudah dibaca daripada kode yang pintar.
-5. Nama variabel boleh campur Indonesia/Inggris, konsisten sama istilah di README (`kelas`, `materi`, `soal`, `kuis`, `xp`, `anggota`).
-6. Pesan error untuk pengguna ditulis dalam Bahasa Indonesia.
-7. Response API pakai format JSON konsisten, contoh: `{ "success": true, "data": ..., "message": "..." }`.
-8. React tidak boleh akses database langsung — semua data lewat Laravel API. Validasi dan pengecekan permission wajib di backend, jangan percaya role/permission yang dikirim dari frontend.
+---
 
-### Aturan Migration
+## 📖 Tentang EduVerse
 
-9. Dilarang membuat migration baru hanya untuk menambah kolom ke tabel yang sudah ada. Kalau perlu menambah/mengubah kolom di tabel yang sudah ada, langsung edit file migration yang sudah ada, jangan buat file migration baru.
+**EduVerse** adalah platform *Learning Management System* (LMS) modern yang mengusung konsep **desentralisasi ruang kelas mandiri**. Berbeda dengan platform konvensional yang kaku dan terpusat pada hierarki institusi sekolah, EduVerse memberikan kebebasan bagi setiap pengguna untuk membuat ruang kelasnya sendiri, mengundang anggota melalui **6-Karakter Kode Kelas Unik**, membagi peran secara dinamis (*Owner*, *Admin*, *Member*), serta berkolaborasi dalam mengelola materi dan evaluasi pembelajaran.
 
-Aturan-aturan ini berlaku untuk semua perubahan berikutnya, tanpa perlu diingatkan lagi. Selain itu, jangan redesign halaman utama atau halaman kelas tanpa instruksi eksplisit (desain lama di `Eduverse-Reference/` sudah dianggap final), jangan hapus fitur lama tanpa alasan, dan jangan bikin role baru selain Owner, Admin, Member.
+Aplikasi ini mengintegrasikan dua pilar inovasi:
+1. **Version Control Materi Pembelajaran**: Setiap penambahan dan pengubahan materi melalui alur pengajuan draf, peninjauan berdampingan (*Side-by-Side Review*), dan verifikasi dua arah untuk menjamin kualitas konten.
+2. **Gamifikasi Kuis Edukatif**: Pengalaman ujian yang interaktif menyerupai game dengan undian 8 variasi *Power-Up*, *Instant Lock & Feedback*, papan peringkat kelas (*Leaderboard*), serta kurva perolehan *Experience Points* (XP) anti-*farming*.
 
-## Tech Stack
+---
 
-- **Backend**: Laravel, REST API
-- **Auth**: Laravel Sanctum
-- **Frontend**: React, JavaScript, HTML, CSS
-- **Database**: MySQL
+## ✨ Fitur-Fitur Unggulan
 
-## Struktur Project
+### 1. 🏫 Desentralisasi & Manajemen Ruang Kelas
+- **Pembuatan Kelas Instan**: Siapapun bisa membuat ruang kelas dan otomatis menjadi **Owner**.
+- **Kode Kelas 6 Karakter**: Anggota dapat bergabung dengan cepat tanpa verifikasi manual yang rumit.
+- **Regenerasi Kode Kelas**: Owner dapat mengacak ulang kode jika kode lama bocor tanpa memutus anggota yang sudah terdaftar.
+- **Kustomisasi & Pengaturan**: Informasi nama, deskripsi, tema visual, serta opsi penghapusan kelas permanen.
+
+### 2. 👥 Manajemen Peran Berbasis Konteks (*Class-Scoped Roles*)
+- Peran berlaku per kelas (`Owner`, `Admin`, `Member`). Seorang pengguna bisa menjadi Owner di kelasnya sendiri, sekaligus menjadi Member di kelas orang lain.
+- **Promosi & Demosi**: Owner dapat menunjuk Member menjadi Admin atau menurunkannya kembali.
+- **Moderasi Anggota**: Fitur mengeluarkan anggota (*Kick*) dan keluar dari kelas (*Leave*).
+
+### 3. 📚 Kontrol Versi Materi (*Version Control Material*)
+- **Alur Verifikasi Dua Arah**:
+  - Draf materi yang dibuat Admin berstatus `menunggu_verifikasi`.
+  - Owner meninjau revisi dan memutuskan untuk **Approve** (terbit) atau **Reject** (wajib melampirkan catatan revisi).
+  - Materi yang dibuat langsung oleh Owner otomatis berstatus `terverifikasi` (v1).
+- **Side-by-Side Comparison**: Tampilan perbandingan 2 kolom antara versi lama dan draf baru untuk mempermudah audit materi.
+- **Riwayat Versi (*Version History*)**: Seluruh anggota dapat melihat dan membaca arsip versi materi terdahulu.
+
+### 4. 🗃️ Manajemen Mapel & Bank Soal Cerdas (AI-Powered)
+- **Katalog Mata Pelajaran**: Pengelompokan materi dengan kode singkatan dan palet warna visual tematik.
+- **Bank Soal Kelas**: Soal-soal tersimpan terpusat dan dapat digunakan berulang kali untuk berbagai paket kuis.
+- **Smart AI Text Parser**: Cukup salin prompt standar AI, tempel teks soal hasil generate AI, dan sistem akan mem-parsing pertanyaan, opsi A-E, kunci jawaban, serta pembahasan secara instan.
+
+### 5. 🎮 Arena Kuis Gamifikasi Interaktif
+- **Raffle Spin Awal**: Pengundian acak 3 dari 8 variasi *Power-Up* sebelum memulai pengerjaan kuis.
+- **8 Ragam Power-Up**:
+  - 💡 **Hint**: Memunculkan kata kunci bantuan/pembahasan.
+  - ✂️ **Fifty-Fifty (50:50)**: Mengeliminasi 2 opsi jawaban salah secara acak.
+  - 🔍 **Answer Scanner**: Memprediksi probabilitas persentase opsi jawaban benar.
+  - ⏭️ **Skip Question**: Melewati butir soal rumit tanpa penalti skor.
+  - 🎁 **Kotak Misteri**: Efek kejutan acak (Hint, 50:50, Skip, atau +15 XP instan).
+  - 🍀 **Lucky Guess (Pasif)**: Peluang keberuntungan 25-30% mengubah jawaban salah menjadi benar saat dikunci.
+  - 🔄 **Second Chance (Pasif)**: Memberi satu kali kesempatan memilih ulang jika jawaban pertama salah.
+  - 🛡️ **Shield (Pasif)**: Melindungi skor agar tidak berkurang ketika menjawab keliru.
+- **Instant Lock & Feedback**: Pilihan opsi langsung terkunci dengan feedback warna hijau/merah seketika, memberi jeda ~1.5 detik sebelum pindah soal.
+
+### 6. 🏆 Leaderboard & Anti-Farming XP Scaling
+- **Papan Peringkat Real-Time**: Pemeringkatan anggota kelas berdasarkan akumulasi XP dengan lencana *Gold*, *Silver*, dan *Bronze*.
+- **Kurva XP Bertingkat**:
+  - *Percobaan 1*: **100% XP**.
+  - *Percobaan 2*: **50% XP** (apresiasi remedial).
+  - *Percobaan 3+*: **0% XP** (mencegah eksploitasi spam XP).
+
+### 7. 🔒 Keamanan & Sanitasi Sesi
+- Otentikasi stateless via **Laravel Sanctum (Bearer Token)**.
+- **Middleware `CekPeranKelas`**: Memastikan non-anggota diblokir ketat (`403 Forbidden`) saat mencoba mengakses resource kelas.
+- **Clean Slate Logout**: Pembersihan total token di database, pembersihan state global, serta pembersihan storage klien untuk mencegah residu data antar-pengguna.
+
+---
+
+## 🏗️ Arsitektur Sistem
+
+EduVerse dibangun dengan arsitektur terpisah (*Decoupled Client-Server Architecture*):
 
 ```
-EduVerse_PaAri/
-├── Eduverse-Backend/
++-------------------------------------------------------------------------+
+|                       FRONTEND LAYER (React SPA)                       |
+|  - React 18 / 19 + React Router DOM v7 (Dynamic Routing /class/:id)    |
+|  - Vite Build Tool (Fast HMR & Optimized Bundling)                     |
+|  - Vanilla CSS Glassmorphism + Tailwind CSS Utility + Lucide Icons     |
+|  - AppStateContext (Global Auth, Active Class & XP Sync)               |
++-------------------------------------------------------------------------+
+                                    │
+                                    │ HTTP / REST JSON (Sanctum Bearer)
+                                    ▼
++-------------------------------------------------------------------------+
+|                      BACKEND LAYER (Laravel 11 / 12)                    |
+|  - RESTful API Controllers & Clean Architecture                         |
+|  - Laravel Sanctum Authentication & Stateful Guards                    |
+|  - CekPeranKelas Middleware & Gate Policies (Data Isolation)            |
+|  - Eloquent ORM (Eager Loading, Cascade Handlers, Query Scopes)         |
++-------------------------------------------------------------------------+
+                                    │
+                                    │ PDO Connection (MySQL / MariaDB)
+                                    ▼
++-------------------------------------------------------------------------+
+|                       DATABASE LAYER (MySQL 8.0)                        |
+|  - 12 Tabel Relasional (users, classes, mapel, materi, kuis, dll)      |
+|  - Foreign Key Constraints & Cascade Referentials                      |
+|  - Indexed Search Fields & Audit Activity Logs                          |
++-------------------------------------------------------------------------+
+```
+
+---
+
+## 📁 Struktur Direktori Proyek
+
+```plaintext
+EduVerse/
+├── Eduverse-Backend/               # Server RESTful API (Laravel)
 │   ├── app/
 │   │   ├── Http/
-│   │   │   ├── Controllers/
-│   │   │   │   └── Api/
-│   │   │   │       ├── AuthController.php
-│   │   │   │       ├── KelasController.php
-│   │   │   │       ├── AnggotaController.php
-│   │   │   │       ├── MateriController.php
-│   │   │   │       ├── SoalController.php
-│   │   │   │       ├── KuisController.php
-│   │   │   │       └── LeaderboardController.php
-│   │   │   └── Middleware/
-│   │   │       └── CekPeranKelas.php
-│   │   └── Models/
-│   │       ├── User.php
-│   │       ├── Kelas.php
-│   │       ├── AnggotaKelas.php
-│   │       ├── Materi.php
-│   │       ├── MateriVersi.php
-│   │       ├── Soal.php
-│   │       ├── OpsiSoal.php
-│   │       ├── Kuis.php
-│   │       ├── KuisSoal.php
-│   │       ├── PercobaanKuis.php
-│   │       └── JawabanPercobaan.php
+│   │   │   ├── Controllers/Api/   # Auth, Class, Mapel, Materi, Kuis, Soal, Leaderboard
+│   │   │   └── Middleware/        # CekPeranKelas (Otorisasi Akses Kelas)
+│   │   └── Models/                # User, Kelas, AnggotaKelas, Materi, Kuis, dll
 │   ├── database/
-│   │   └── migrations/
-│   └── routes/
-│       └── api.php
-├── Eduverse-Frontend/
-│   └── src/
-│       ├── pages/
-│       │   ├── Login.jsx
-│       │   ├── Register.jsx
-│       │   ├── HalamanUtama.jsx
-│       │   ├── BerandaKelas.jsx
-│       │   ├── Materi.jsx
-│       │   ├── Kuis.jsx
-│       │   ├── KuisKerjakan.jsx
-│       │   ├── Leaderboard.jsx
-│       │   ├── Anggota.jsx
-│       │   └── Pengaturan.jsx
-│       ├── components/
-│       ├── context/
-│       │   └── AuthContext.jsx
-│       └── services/
-│           └── api.js
-├── Eduverse-Reference/        desain lama, acuan visual — jangan diubah/dihapus
-└── README.md
+│   │   ├── migrations/            # 12 File Migrasi Skema Basis Data
+│   │   └── seeders/               # Database Seeder (Demo Data)
+│   ├── routes/
+│   │   └── api.php                # Endpoint Katalog API EduVerse
+│   └── .env.example
+│
+├── Eduverse-Frontend/              # Klien Antarmuka (React Single Page Application)
+│   ├── src/
+│   │   ├── assets/                # Aset Gambar, Logo, dan Gaya CSS
+│   │   ├── components/            # Modal & Komponen Reusable (Navbar, Sidebar, Modals)
+│   │   ├── context/               # AppStateContext (Penyimpan State Global)
+│   │   ├── layouts/               # Layout Pembungkus Halaman
+│   │   ├── pages/                 # Halaman Aplikasi (Main, Home, Quiz, Leaderboard, dll)
+│   │   ├── routes/                # Konfigurasi Rute Aplikasi
+│   │   └── services/              # authService & Integrasi API Helper
+│   ├── package.json
+│   └── vite.config.js
+│
+├── Dokumentasi_Aplikasi_EduVerse.md # Dokumentasi Lengkap & Buku Panduan Teknis
+└── README.md                       # Ringkasan Proyek & Panduan Memulai
 ```
 
-## Role dan Permission
+---
 
-Role berlaku **per-kelas**, disimpan di kolom `role` tabel `anggota_kelas` — satu akun bisa jadi Owner di kelas buatan sendiri, tapi cuma Member di kelas orang lain.
+## 🛠️ Persyaratan Sistem (*Prerequisites*)
 
-| Peran | Siapa | Bisa |
-|---|---|---|
-| Owner | Pembuat kelas (otomatis) | Ubah info kelas, atur Admin, kelola anggota, buat materi (langsung terverifikasi), buat soal & kuis, verifikasi materi buatan Admin, generate ulang kode kelas, transfer kepemilikan, hapus kelas |
-| Admin | Ditambahkan Owner | Buat/edit materi (masuk `menunggu_verifikasi`), buat soal, buat kuis, buat pengumuman, kelola konten sesuai permission |
-| Member | Join pakai kode kelas | Lihat materi & riwayat versinya, kerjain & ulangi kuis, lihat hasil pengerjaan, lihat leaderboard, lihat anggota kelas |
+Pastikan lingkungan lokal Anda telah terpasang:
+- **PHP**: `>= 8.2` (dengan ekstensi `pdo_mysql`, `mbstring`, `openssl`, `curl`)
+- **Composer**: `>= 2.5`
+- **Node.js**: `>= 18.x` atau `>= 20.x` (LTS)
+- **npm**: `>= 9.x`
+- **MySQL**: `>= 8.0` atau **MariaDB** `>= 10.5`
 
-Tidak ada role tambahan (Moderator, Kontributor, Super Admin, dsb).
+---
 
-## Routes (routes/api.php)
+## 🚀 Panduan Instalasi & Menjalankan
 
-```
-POST /api/register                                    → daftar akun
-POST /api/login                                        → login
-POST /api/logout                                       → logout
-GET  /api/user                                         → profil sendiri
-PUT  /api/user                                          → edit profil
-
-GET  /api/kelas                                        → daftar kelas yang diikuti user
-POST /api/kelas                                        → buat kelas baru, pembuat jadi Owner
-POST /api/kelas/gabung                                 → join kelas pakai kode
-GET  /api/kelas/{kelas}                                → beranda kelas
-PUT  /api/kelas/{kelas}                                → update info kelas (Owner)
-DELETE /api/kelas/{kelas}                              → hapus kelas (Owner)
-POST /api/kelas/{kelas}/regenerate-kode                → buat ulang kode kelas (Owner)
-POST /api/kelas/{kelas}/transfer-owner                 → transfer kepemilikan (Owner)
-
-GET  /api/kelas/{kelas}/anggota                        → daftar anggota
-PUT  /api/kelas/{kelas}/anggota/{user}                 → ubah role anggota (Owner)
-DELETE /api/kelas/{kelas}/anggota/{user}                → keluarkan anggota (Owner)
-
-GET  /api/kelas/{kelas}/materi                          → daftar materi
-POST /api/kelas/{kelas}/materi                          → buat materi (Admin & Owner)
-GET  /api/kelas/{kelas}/materi/{materi}                 → detail + versi aktif
-PUT  /api/kelas/{kelas}/materi/{materi}                 → edit, bikin versi baru
-GET  /api/kelas/{kelas}/materi/{materi}/versi           → riwayat versi
-GET  /api/kelas/{kelas}/materi-verifikasi                → daftar menunggu verifikasi (Owner)
-POST /api/kelas/{kelas}/materi-versi/{versi}/setuju      → approve versi (Owner)
-POST /api/kelas/{kelas}/materi-versi/{versi}/tolak       → tolak versi, catatan wajib (Owner)
-
-GET  /api/kelas/{kelas}/soal                             → bank soal
-POST /api/kelas/{kelas}/soal                             → buat soal manual satu-satu (Admin & Owner)
-POST /api/kelas/{kelas}/soal/parse-teks                   → parse teks hasil AI jadi preview soal, belum disimpan (Admin & Owner)
-POST /api/kelas/{kelas}/soal/impor                        → simpan banyak soal sekaligus dari hasil preview parse-teks
-PUT  /api/kelas/{kelas}/soal/{soal}                      → edit soal
-DELETE /api/kelas/{kelas}/soal/{soal}                    → hapus soal
-
-GET  /api/kelas/{kelas}/kuis                             → daftar kuis
-POST /api/kelas/{kelas}/kuis                             → buat kuis dari bank soal (Admin & Owner)
-GET  /api/kelas/{kelas}/kuis/{kuis}                      → detail kuis
-PUT  /api/kelas/{kelas}/kuis/{kuis}                      → edit kuis
-POST /api/kelas/{kelas}/kuis/{kuis}/mulai                → mulai percobaan baru
-POST /api/kelas/{kelas}/kuis/{kuis}/percobaan/{percobaan}/submit → submit jawaban, hitung skor & XP
-GET  /api/kelas/{kelas}/kuis/{kuis}/riwayat              → riwayat percobaan user
-
-GET  /api/kelas/{kelas}/leaderboard                      → leaderboard kelas berdasar XP
+### 1. Kloning Repositori
+```bash
+git clone https://github.com/refkyaja/EduVerse_PaAri.git
+cd EduVerse_PaAri
 ```
 
-## Halaman Frontend (React)
+### 2. Setup Backend (Laravel API)
 
-### Login / Register
-- Form login dan register terpisah, data akun dasar: nama, username, email, password, foto profil, bio
+1. Masuk ke direktori backend:
+   ```bash
+   cd Eduverse-Backend
+   ```
+2. Pasang pustaka dependensi PHP via Composer:
+   ```bash
+   composer install
+   ```
+3. Salin berkas lingkungan `.env`:
+   ```bash
+   cp .env.example .env
+   ```
+4. Buat kunci enkripsi aplikasi:
+   ```bash
+   php artisan key:generate
+   ```
+5. Siapkan basis data baru di MySQL (misal: `eduverse_db`):
+   ```sql
+   CREATE DATABASE eduverse_db CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+   ```
+6. Sesuaikan konfigurasi database pada berkas `.env`:
+   ```ini
+   DB_CONNECTION=mysql
+   DB_HOST=127.0.0.1
+   DB_PORT=3306
+   DB_DATABASE=eduverse_db
+   DB_USERNAME=root
+   DB_PASSWORD=
 
-### HalamanUtama.jsx
-- Daftar kelas yang diikuti, tombol Gabung Kelas & Buat Kelas, profil, pengaturan akun
-- Desain halaman ini sudah dianggap baik — fokus pengembangan cuma bikin responsif, jangan redesign
+   SANCTUM_STATEFUL_DOMAINS=localhost:5173,127.0.0.1:5173
+   SESSION_DOMAIN=localhost
+   ```
+7. Eksekusi migrasi tabel dan data awal (*seeder*):
+   ```bash
+   php artisan migrate --seed
+   ```
+8. Jalankan server backend:
+   ```bash
+   php artisan serve --port=8000
+   ```
+   > Server backend akan berjalan pada `http://127.0.0.1:8000`.
 
-### BerandaKelas.jsx
-- Pengumuman, aktivitas terbaru, materi baru, kuis baru, info kelas
-- Navigasi Member/Admin: Beranda | Materi | Kuis | Leaderboard | Anggota
-- Navigasi Owner: tambah menu Pengaturan
+---
 
-### Materi.jsx
-- Daftar materi, detail materi dengan dropdown/kontrol versi (menampilkan nomor versi, waktu perubahan, pengguna yang mengubah, status)
-- Form kontribusi materi buat Admin & Owner; materi buatan Owner langsung terverifikasi, buatan Admin masuk `menunggu_verifikasi`
-- Halaman verifikasi khusus Owner buat approve/reject materi dari Admin
+### 3. Setup Frontend (React Vite)
 
-### Kuis.jsx & KuisKerjakan.jsx
-- Daftar kuis (status aktif), halaman kerjain kuis (timer opsional, acak soal/opsi kalau diaktifkan)
-- Kuis bisa diulang; tiap percobaan disimpan biar riwayat pengerjaan tetap ada
-- Manajemen bank soal (buat/edit/hapus soal) buat Admin & Owner, dengan 2 mode input:
-  - **Manual**: form satu-satu (pertanyaan, jenis soal, opsi jawaban, jawaban benar, pembahasan)
-  - **Tempel Teks**: textarea buat paste hasil generate AI (Claude/ChatGPT/dst), tombol "Parse"
-    manggil `POST /soal/parse-teks` buat dapetin preview soal yang bisa diedit sebelum disimpan.
-    Format teks: nomor+titik+pertanyaan, opsi A/B/C/D per baris, baris "Jawaban: [huruf]",
-    opsional baris "Pembahasan: ...". Soal yang gagal ke-parse ditandain di preview, bukan
-    didiemin/dibuang. Setelah direview, submit ke `POST /soal/impor` buat simpen semuanya.
-  - Form kuis tidak punya field jadwal/hari — kuis dibuat kapan aja, gak terikat jadwal
-    mata pelajaran (EduVerse gak fokus ke sekolah, lihat README bagian Tujuan).
+1. Buka terminal baru dan masuk ke direktori frontend:
+   ```bash
+   cd Eduverse-Frontend
+   ```
+2. Pasang seluruh dependensi JavaScript:
+   ```bash
+   npm install
+   ```
+3. Jalankan server pengembangan Vite:
+   ```bash
+   npm run dev
+   ```
+   > Aplikasi klien dapat diakses melalui peramban di `http://localhost:5173`.
 
-### Leaderboard.jsx
-- Peringkat anggota kelas berdasarkan XP, bukan skor mentah
+---
 
-### Anggota.jsx
-- Daftar seluruh anggota kelas: foto profil, nama, username
+## 📋 Matriks Hak Akses Peran (*Role Matrix*)
 
-### Pengaturan.jsx (khusus Owner)
-- Informasi kelas (nama, deskripsi)
-- Kode kelas (lihat, buat ulang)
-- Kelola Admin & anggota
-- Danger zone: hapus kelas, transfer kepemilikan
+| Hak Akses / Fitur | Owner Kelas | Admin Kelas | Member Kelas |
+| :--- | :---: | :---: | :---: |
+| Mengubah Info & Kode Kelas | ✅ | ❌ | ❌ |
+| Mengeluarkan Anggota (*Kick*) | ✅ | ❌ | ❌ |
+| Promosi / Demosi Admin | ✅ | ❌ | ❌ |
+| Hapus Ruang Kelas | ✅ | ❌ | ❌ |
+| Menyetujui / Menolak Draf Materi | ✅ | ❌ | ❌ |
+| Buat Materi (*Direct Publish*) | ✅ | ❌ | ❌ |
+| Ajukan Draf Materi Baru | ✅ | ✅ | ❌ |
+| Kelola Mapel & Bank Soal | ✅ | ✅ | ❌ |
+| Rancang & Terbitkan Kuis | ✅ | ✅ | ❌ |
+| Membaca Materi Terverifikasi | ✅ | ✅ | ✅ |
+| Mengerjakan Kuis & Power-Up | ✅ | ✅ | ✅ |
+| Melihat Peringkat Leaderboard | ✅ | ✅ | ✅ |
 
-## Database
+---
 
-### Tabel users
-- `id`, `name`, `username`, `email`, `password`, `foto_profil`, `bio`, `timestamps`
+## 📡 Ringkasan Endpoint API Utama
 
-### Tabel kelas
-- `id`, `nama`, `deskripsi`, `kode_kelas` (unique), `owner_id` (FK users), `timestamps`
+| Method | Endpoint | Deskripsi | Akses |
+| :--- | :--- | :--- | :--- |
+| `POST` | `/api/register` | Pendaftaran akun baru | Publik |
+| `POST` | `/api/login` | Otentikasi pengguna & terbitkan token | Publik |
+| `POST` | `/api/logout` | Revoke token aktif & hapus sesi | Auth |
+| `GET` | `/api/classes` | Ambil daftar kelas yang diikuti | Auth |
+| `POST` | `/api/classes` | Buat ruang kelas baru | Auth |
+| `POST` | `/api/classes/join` | Gabung kelas via 6-karakter kode | Auth |
+| `GET` | `/api/classes/{id}` | Ambil detail informasi kelas | Anggota |
+| `POST` | `/api/classes/{id}/regenerate-code` | Acak ulang kode akses kelas | Owner |
+| `GET` | `/api/classes/{id}/members` | Daftar seluruh anggota kelas | Anggota |
+| `POST` | `/api/classes/{id}/members/{u}/promote` | Promosikan Member menjadi Admin | Owner |
+| `GET` | `/api/classes/{id}/materi` | Daftar materi pembelajaran | Anggota |
+| `POST` | `/api/classes/{id}/materi` | Buat / ajukan materi baru | Owner / Admin |
+| `POST` | `/api/classes/{id}/materi-versi/{v}/verify` | Approve / Reject draf materi | Owner |
+| `POST` | `/api/classes/{id}/soal/parse-teks` | Parsing teks soal format AI otomatis | Owner / Admin |
+| `GET` | `/api/classes/{id}/kuis` | Katalog kuis yang tersedia | Anggota |
+| `POST` | `/api/classes/{id}/kuis/{id}/submit` | Submit jawaban & kalkulasi skor/XP | Anggota |
+| `GET` | `/api/classes/{id}/leaderboard` | Peringkat anggota berdasarkan XP | Anggota |
 
-### Tabel anggota_kelas
-- `id`, `kelas_id`, `user_id`, `role` (enum: owner, admin, member), `timestamps`
+---
 
-### Tabel materi
-- `id`, `kelas_id`, `judul`, `versi_aktif_id` (nullable, FK ke materi_versi tanpa constraint biar gak circular), `dibuat_oleh` (FK users), `timestamps`
+## 🧪 Format Prompt Generator Soal AI
 
-### Tabel materi_versi
-- `id`, `materi_id`, `nomor_versi`, `isi`, `file` (nullable), `status` (enum: draft, menunggu_verifikasi, terverifikasi, perlu_perbaikan, ditolak), `dibuat_oleh`, `ditinjau_oleh` (nullable), `ditinjau_pada` (nullable), `catatan_review` (nullable), `timestamps`
+Untuk menambahkan soal secara cepat menggunakan AI (ChatGPT, Claude, Gemini), salin format template berikut:
 
-### Tabel soal
-- `id`, `kelas_id`, `pertanyaan`, `jenis_soal` (enum: pilihan_ganda, benar_salah), `pembahasan` (nullable), `tingkat_kesulitan` (nullable), `materi_id` (nullable, FK materi), `dibuat_oleh`, `timestamps`
+```text
+Buatkan 5 soal pilihan ganda tentang [Topik Materi].
+Gunakan format teks berikut secara persis tanpa modifikasi format:
 
-### Tabel opsi_soal
-- `id`, `soal_id`, `teks_opsi`, `benar` (boolean), `urutan`
+1. [Pertanyaan soal]
+A. [Pilihan A]
+B. [Pilihan B]
+C. [Pilihan C]
+D. [Pilihan D]
+E. [Pilihan E]
+Jawaban: [Huruf A/B/C/D/E]
+Pembahasan: [Penjelasan singkat jawaban benar]
 
-### Tabel kuis
-- `id`, `kelas_id`, `judul`, `deskripsi`, `batas_waktu` (nullable), `jumlah_soal`, `acak_soal` (boolean), `acak_opsi` (boolean), `status_aktif` (boolean), `dibuat_oleh`, `timestamps`
+(Pisahkan setiap butir soal dengan satu baris kosong)
+```
+*Tempel hasil respons AI ke dalam dialog `Impor Teks AI` pada tab Bank Soal EduVerse untuk konversi otomatis.*
 
-### Tabel kuis_soal
-- `id`, `kuis_id`, `soal_id` (pivot, soal dari bank bisa dipakai lintas kuis), `urutan`
+---
 
-### Tabel percobaan_kuis
-- `id`, `kuis_id`, `user_id`, `percobaan_ke`, `skor`, `xp_didapat`, `mulai_pada`, `selesai_pada`, `timestamps`
+## 👥 Kontributor & Ucapan Terima Kasih
 
-### Tabel jawaban_percobaan
-- `id`, `percobaan_id`, `soal_id`, `opsi_dipilih_id`, `benar`, `timestamps`
+Proyek ini dikembangkan oleh **Tim Pengembang EduVerse**:
+- **Lead Architect & Fullstack Engineer**
+- **Dosen & Pembimbing Akademik**
 
-## Catatan Penting
+Terima kasih kepada seluruh kontributor dan pengguna yang telah berpartisipasi dalam pengujian serta pengembangan EduVerse.
 
-- Kode kelas: kalau di-regenerate, kode lama otomatis gak berlaku lagi karena udah gak match ke row manapun — gak perlu tabel riwayat kode terpisah.
-- Materi punya riwayat versi lengkap (nomor versi, waktu, pengubah, status, catatan) — versi lama tidak dihapus.
-- Soal disimpan sebagai bank yang reusable, dipakai lintas kuis lewat tabel pivot `kuis_soal`.
-- XP: percobaan pertama dapat XP penuh, percobaan kedua dapat XP lebih sedikit, percobaan ketiga dst tidak dapat XP tambahan — detail angka disesuaikan saat implementasi.
-- Leaderboard dihitung dari XP (bukan skor mentah), on-the-fly dari agregat `percobaan_kuis`, per kelas.
-- Middleware `CekPeranKelas` cek kolom `role` di `anggota_kelas`, gak perlu package role eksternal karena scoping-nya per-kelas.
-- Kalau backend dan frontend jalan di domain/port beda, pastikan `SANCTUM_STATEFUL_DOMAINS` dan CORS di Laravel udah bener, dan request dari React pakai `withCredentials: true`.
+---
 
-## Rencana Pengembangan
+## 📄 Lisensi
 
-1. Frontend: migrasi UI lama ke React, pertahankan desain, bikin responsif, routing & struktur komponen
-2. Backend: setup Laravel, database, migration, model, API, authentication
-3. Authentication: register, login, logout, session/token, profile
-4. Sistem Kelas: buat kelas, lihat kelas, gabung pakai kode, regenerate kode, role Owner/Admin/Member
-5. Materi: buat, edit, verifikasi Owner, status materi, version history
-6. Soal: bank soal, buat/edit/hapus, topik, pembahasan
-7. Kuis: buat kuis, ambil soal dari bank, kerjain, timer, submit, penilaian, riwayat & pengulangan
-8. XP dan Leaderboard: sistem XP, perhitungan, leaderboard per kelas
-9. Pengaturan Owner: info kelas, kelola Admin/anggota, regenerate kode, transfer Owner, hapus kelas
+Proyek ini didistribusikan di bawah lisensi **MIT License**. Lihat berkas [LICENSE](LICENSE) untuk informasi lebih lanjut.
