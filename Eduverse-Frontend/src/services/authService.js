@@ -197,5 +197,57 @@ export const authService = {
 
   getToken() {
     return localStorage.getItem('eduverse_token');
+  },
+
+  async updatePassword(data) {
+    try {
+      const response = await fetch(`${API_BASE_URL}/user/password`, {
+        method: 'PUT',
+        headers: getAuthHeaders(),
+        body: JSON.stringify(data),
+      });
+
+      const result = await response.json();
+
+      if (!response.ok || !result.success) {
+        const errorMsg = result.message || 'Gagal memperbarui kata sandi';
+        const errors = result.errors ? Object.values(result.errors).flat().join(', ') : '';
+        throw new Error(errors ? `${errorMsg}: ${errors}` : errorMsg);
+      }
+
+      if (result.data) {
+        localStorage.setItem('eduverse_user', JSON.stringify(result.data));
+      }
+
+      return result;
+    } catch (err) {
+      if (err.name === 'TypeError' || (err.message && err.message.includes('fetch'))) {
+        throw new Error('Gagal terhubung ke server backend Laravel.');
+      }
+      throw err;
+    }
+  },
+
+  async deleteAccount() {
+    try {
+      const response = await fetch(`${API_BASE_URL}/user`, {
+        method: 'DELETE',
+        headers: getAuthHeaders(),
+      });
+
+      const result = await response.json();
+
+      if (!response.ok || !result.success) {
+        throw new Error(result.message || 'Gagal menghapus akun');
+      }
+
+      await this.logout();
+      return result;
+    } catch (err) {
+      if (err.name === 'TypeError' || (err.message && err.message.includes('fetch'))) {
+        throw new Error('Gagal terhubung ke server backend Laravel.');
+      }
+      throw err;
+    }
   }
 };

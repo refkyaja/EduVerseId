@@ -12,6 +12,8 @@ import LeaderboardPage from '../pages/LeaderboardPage';
 import ProfilePage from '../pages/ProfilePage';
 import LoginPage from '../pages/LoginPage';
 import RegisterPage from '../pages/RegisterPage';
+import AuthCallbackPage from '../pages/AuthCallbackPage';
+import SetUsernamePage from '../pages/SetUsernamePage';
 
 import MainPage from '../pages/MainPage';
 import ClassAnggotaPage from '../pages/ClassAnggotaPage';
@@ -62,6 +64,8 @@ export default function AppRoutes({
       <Route path="/login.html" element={<Navigate to="/login" replace />} />
       <Route path="/register" element={<RegisterPage />} />
       <Route path="/register.html" element={<Navigate to="/register" replace />} />
+      <Route path="/auth/callback" element={<AuthCallbackPage />} />
+      <Route path="/set-username" element={<ProtectedRoute><SetUsernamePage /></ProtectedRoute>} />
 
       {/* 1. HALAMAN UTAMA / DAFTAR KELAS (PROTECTED) */}
       <Route

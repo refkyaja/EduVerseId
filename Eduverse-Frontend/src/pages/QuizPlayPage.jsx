@@ -511,33 +511,53 @@ export default function QuizPlayPage() {
   if (quizPhase === 'rolling') {
     const isDone = unlockedPowerups.length > 0;
     return (
-      <div className="min-h-screen w-full bg-gradient-to-br from-dark-surface via-primary to-dark-surface text-primary-foreground flex flex-col items-center justify-center p-6 overflow-hidden relative">
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(255,255,255,0.15),transparent_60%)]"></div>
-        <div className="relative text-center z-10 max-w-md w-full">
-          <p className="text-xs font-extrabold uppercase tracking-[0.3em] text-white/70">
-            {isDone ? 'Power-up kamu' : 'Mengundi power-up...'}
-          </p>
-          <h1 className="text-3xl font-extrabold italic mt-2">
-            {isDone ? 'Siap Tempur!' : 'Putar Roda Takdir'}
+      <div className="min-h-screen w-full bg-[#0b0914] text-white flex flex-col items-center justify-center p-6 overflow-hidden relative selection:bg-primary/30">
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] sm:w-[800px] h-[600px] sm:h-[800px] bg-gradient-to-tr from-purple-900/20 via-primary/20 to-blue-900/10 rounded-full blur-[140px] pointer-events-none" />
+        <div className="absolute inset-0 bg-[radial-gradient(rgba(255,255,255,0.06)_1px,transparent_1px)] [background-size:32px_32px] pointer-events-none opacity-40" />
+        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,transparent_30%,#0b0914_90%)] pointer-events-none" />
+
+        <div className="relative text-center z-10 max-w-lg w-full flex flex-col items-center">
+          <h1 className="text-3xl sm:text-4xl font-extrabold italic text-white drop-shadow-md">
+            {isDone ? 'Power-Up Terpilih!' : 'Memilih Power-Up...'}
           </h1>
-          <div className="flex gap-4 mt-10 justify-center">
+
+          <div className="flex gap-4 sm:gap-6 mt-10 justify-center">
             {rollItems.map((id, idx) => {
               const pu = POWERUPS_DEFINITIONS.find(p => p.id === id) || POWERUPS_DEFINITIONS[0];
               const IconComp = pu.Icon;
               return (
                 <div
                   key={idx}
-                  className={`w-24 h-24 rounded-3xl bg-white/10 backdrop-blur-xl border-2 ${
-                    isDone ? 'border-xp-gold shadow-[0_0_30px_rgba(252,211,77,0.6)] animate-scale-in' : 'border-white/30'
-                  } flex flex-col items-center justify-center gap-1.5 transition-all`}
+                  className={`w-24 h-24 sm:w-28 sm:h-28 rounded-3xl backdrop-blur-2xl border transition-all duration-500 flex flex-col items-center justify-center gap-2 ${
+                    isDone
+                      ? 'bg-gradient-to-b from-amber-500/10 to-white/[0.02] border-amber-400/60 shadow-[0_0_35px_rgba(251,191,36,0.3)] ring-1 ring-amber-400/30 animate-scale-in'
+                      : 'bg-white/[0.04] border-white/10 shadow-lg'
+                  }`}
                 >
-                  <IconComp className="w-8 h-8 text-white" strokeWidth={2.4} />
-                  <span className="text-[10px] font-extrabold uppercase tracking-wider text-white">{pu.name}</span>
+                  <div className={`w-10 h-10 rounded-2xl flex items-center justify-center ${
+                    isDone ? 'bg-amber-400/15 border border-amber-400/30' : 'bg-white/5 border border-white/10'
+                  }`}>
+                    <IconComp className={`w-5 h-5 sm:w-6 sm:h-6 ${isDone ? 'text-amber-300' : 'text-white'}`} strokeWidth={2.4} />
+                  </div>
+                  <span className={`text-[10px] sm:text-[11px] font-extrabold uppercase tracking-wider ${
+                    isDone ? 'text-amber-200' : 'text-white/80'
+                  }`}>
+                    {pu.name}
+                  </span>
                 </div>
               );
             })}
           </div>
-          {isDone && <p className="text-sm text-white/80 mt-10 animate-fade-in">Memasuki arena...</p>}
+
+          {isDone && (
+            <div className="mt-10 flex items-center justify-center gap-2.5 text-xs font-semibold text-white/60 animate-fade-in">
+              <span className="relative flex h-2 w-2">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+              </span>
+              <span>Memasuki arena...</span>
+            </div>
+          )}
         </div>
       </div>
     );

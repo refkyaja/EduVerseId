@@ -579,6 +579,15 @@ export default function AuthContainer({ initialMode = 'login' }) {
                   </button>
                 </form>
 
+                <div className="pemisah">
+                  <span>atau</span>
+                </div>
+
+                <a className="btn-google" href="http://localhost:8000/api/auth/google/redirect">
+                  <i className="bx bxl-google" style={{ fontSize: '1.25rem', color: '#ea4335' }}></i>
+                  <span>Daftar dengan Google</span>
+                </a>
+
                 <p>
                   <span>Sudah punya akun? </span>
                   <b onClick={toggle} className="pointer">
@@ -669,6 +678,15 @@ export default function AuthContainer({ initialMode = 'login' }) {
                     )}
                   </button>
                 </form>
+
+                <div className="pemisah">
+                  <span>atau</span>
+                </div>
+
+                <a className="btn-google" href="http://localhost:8000/api/auth/google/redirect">
+                  <i className="bx bxl-google" style={{ fontSize: '1.25rem', color: '#ea4335' }}></i>
+                  <span>Masuk dengan Google</span>
+                </a>
 
                 <p>
                   <span>Belum punya akun? </span>

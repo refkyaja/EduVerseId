@@ -253,6 +253,17 @@ export function AppStateProvider({ children }) {
     return res;
   };
 
+  const handleAuthTokenSuccess = async (token) => {
+    localStorage.setItem('eduverse_token', token);
+    const user = await authService.getProfile();
+    if (user) {
+      setCurrentUser(user);
+      setAppState(loadStateForUser(user));
+      await fetchUserClasses();
+    }
+    return user;
+  };
+
   const updateUserProfile = async (profileData) => {
     try {
       const updated = await authService.updateProfile(profileData);
@@ -441,6 +452,7 @@ export function AppStateProvider({ children }) {
       addClassXp,
       loginUser,
       registerUser,
+      handleAuthTokenSuccess,
       updateUserProfile,
       logoutUser,
       toggleDarkMode,

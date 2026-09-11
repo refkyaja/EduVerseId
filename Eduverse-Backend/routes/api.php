@@ -21,12 +21,16 @@ use Illuminate\Support\Facades\Route;
 Route::post('/register', [AuthController::class, 'register']);
 Route::post('/login', [AuthController::class, 'login']);
 Route::get('/check-username', [AuthController::class, 'checkUsername']);
+Route::get('/auth/google/redirect', [AuthController::class, 'googleRedirect']);
+Route::get('/auth/google/callback', [AuthController::class, 'googleCallback']);
 
 // Protected Routes (Requires Laravel Sanctum Token)
 Route::middleware('auth:sanctum')->group(function () {
     // User Profile & Auth
     Route::get('/user', [AuthController::class, 'user']);
     Route::put('/user/profile', [AuthController::class, 'updateProfile']);
+    Route::put('/user/password', [AuthController::class, 'updatePassword']);
+    Route::delete('/user', [AuthController::class, 'deleteAccount']);
     Route::post('/logout', [AuthController::class, 'logout']);
 
     // Class Management API

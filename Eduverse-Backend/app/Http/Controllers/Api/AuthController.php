@@ -9,6 +9,7 @@ use App\Http\Resources\UserResource;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
+use Laravel\Socialite\Facades\Socialite;
 
 class AuthController extends Controller
 {
@@ -150,6 +151,123 @@ class AuthController extends Controller
         return response()->json([
             'success' => true,
             'message' => 'Logout berhasil',
+            'data' => null,
+        ], 200);
+    }
+
+    public function googleRedirect()
+    {
+        return Socialite::driver('google')->stateless()->redirect();
+    }
+
+    public function googleCallback()
+    {
+        $frontendUrl = env('FRONTEND_URL', 'http://localhost:5173');
+
+        try {
+            $googleUser = Socialite::driver('google')->stateless()->user();
+        } catch (\Exception $e) {
+            return redirect($frontendUrl . '/login?error=' . urlencode('Gagal mengautentikasi akun Google.'));
+        }
+
+        $email = $googleUser->getEmail();
+        $nama = $googleUser->getName() ?? $googleUser->getNickname() ?? 'Pengguna Google';
+        $avatar = $googleUser->getAvatar();
+        $googleId = $googleUser->getId();
+
+        $user = User::where('email', $email)->first();
+        $isNewUser = false;
+
+        if ($user) {
+            if (!$user->google_id) {
+                $user->google_id = $googleId;
+            }
+            if (!$user->profile_photo && $avatar) {
+                $user->profile_photo = $avatar;
+            }
+            $user->save();
+        } else {
+            $isNewUser = true;
+            $prefix = explode('@', $email)[0];
+            $cleanUsername = preg_replace('/[^a-z0-9_]/', '', strtolower($prefix));
+            if (strlen($cleanUsername) < 3) {
+                $cleanUsername = 'user_' . substr(md5(uniqid()), 0, 5);
+            }
+            $username = $cleanUsername;
+            $counter = 1;
+            while (User::where('username', $username)->exists()) {
+                $username = $cleanUsername . $counter;
+                $counter++;
+            }
+
+            $user = User::create([
+                'name' => $nama,
+                'username' => $username,
+                'email' => $email,
+                'profile_photo' => $avatar,
+                'password' => null,
+                'google_id' => $googleId,
+            ]);
+        }
+
+        $token = $user->createToken('auth_token')->plainTextToken;
+
+        return redirect($frontendUrl . '/auth/callback?token=' . $token . '&is_new_user=' . ($isNewUser ? '1' : '0'));
+    }
+
+    public function updatePassword(Request $request)
+    {
+        $user = $request->user();
+
+        if ($user->password !== null) {
+            $request->validate([
+                'current_password' => 'required|string',
+                'password' => 'required|string|min:8|confirmed',
+            ], [
+                'current_password.required' => 'Kata sandi saat ini wajib diisi.',
+                'password.required' => 'Kata sandi baru wajib diisi.',
+                'password.min' => 'Kata sandi baru minimal 8 karakter.',
+                'password.confirmed' => 'Konfirmasi kata sandi baru tidak sesuai.',
+            ]);
+
+            if (!Hash::check($request->current_password, $user->password)) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Kata sandi saat ini salah.',
+                    'errors' => [
+                        'current_password' => ['Kata sandi saat ini yang Anda masukkan salah.'],
+                    ],
+                ], 422);
+            }
+        } else {
+            $request->validate([
+                'password' => 'required|string|min:8|confirmed',
+            ], [
+                'password.required' => 'Kata sandi baru wajib diisi.',
+                'password.min' => 'Kata sandi baru minimal 8 karakter.',
+                'password.confirmed' => 'Konfirmasi kata sandi baru tidak sesuai.',
+            ]);
+        }
+
+        $user->password = Hash::make($request->password);
+        $user->save();
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Kata sandi berhasil diperbarui.',
+            'data' => new UserResource($user),
+        ], 200);
+    }
+
+    public function deleteAccount(Request $request)
+    {
+        $user = $request->user();
+        $user->tokens()->delete();
+        $user->delete();
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Akun Anda telah berhasil dihapus secara permanen.',
             'data' => null,
         ], 200);
     }

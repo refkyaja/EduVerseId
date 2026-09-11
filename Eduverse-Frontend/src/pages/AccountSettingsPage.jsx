@@ -24,12 +24,25 @@ import { useAppState } from '../context/AppStateContext';
 import ImageCropperModal from '../components/ImageCropperModal';
 import Button from '../components/Button';
 import ConfirmModal from '../components/ConfirmModal';
+import { authService } from '../services/authService';
 
 export default function AccountSettingsPage() {
   const navigate = useNavigate();
   const fileInputRef = useRef(null);
   const { appState, currentUser, userProfile, updateUserProfile, toggleDarkMode, showToast, logoutUser } = useAppState();
   const [isLogoutConfirmOpen, setIsLogoutConfirmOpen] = useState(false);
+  const [isDeleteAccountModalOpen, setIsDeleteAccountModalOpen] = useState(false);
+
+  const handleDeleteAccount = async () => {
+    try {
+      await authService.deleteAccount();
+      await logoutUser();
+      showToast('Akun Anda telah berhasil dihapus secara permanen dari database.');
+      navigate('/login', { replace: true });
+    } catch (err) {
+      showToast(err.message || 'Gagal menghapus akun.');
+    }
+  };
 
   const activeUser = currentUser || userProfile || {
     name: 'Refky Satria',
@@ -152,13 +165,15 @@ export default function AccountSettingsPage() {
   };
 
   // 4. Handle Password Change Submit
-  const handlePasswordSubmit = (e) => {
+  const handlePasswordSubmit = async (e) => {
     e.preventDefault();
     setPasswordError('');
     setPasswordSuccess('');
 
-    if (!currentPassword) {
-      setPasswordError('Masukkan kata sandi lama Anda.');
+    const hasExistingPassword = activeUser.has_password !== false;
+
+    if (hasExistingPassword && !currentPassword) {
+      setPasswordError('Masukkan kata sandi saat ini.');
       return;
     }
 
@@ -173,14 +188,35 @@ export default function AccountSettingsPage() {
     }
 
     setPasswordLoading(true);
-    setTimeout(() => {
-      setPasswordLoading(false);
-      setPasswordSuccess('Kata sandi berhasil diperbarui!');
+    try {
+      const payload = {
+        password: newPassword,
+        password_confirmation: confirmPassword,
+      };
+      if (hasExistingPassword) {
+        payload.current_password = currentPassword;
+      }
+
+      await authService.updatePassword(payload);
+
+      setPasswordSuccess(
+        hasExistingPassword
+          ? 'Kata sandi berhasil diperbarui!'
+          : 'Kata sandi berhasil dibuat! Anda sekarang dapat masuk menggunakan email dan kata sandi.'
+      );
       setCurrentPassword('');
       setNewPassword('');
       setConfirmPassword('');
-      showToast('Kata sandi Anda telah berhasil diubah.');
-    }, 600);
+      showToast('Kata sandi Anda telah berhasil disimpan.');
+      if (updateUserProfile) {
+        updateUserProfile({ has_password: true });
+      }
+    } catch (err) {
+      setPasswordError(err.message || 'Gagal memperbarui kata sandi.');
+      showToast(err.message || 'Gagal memperbarui kata sandi.', 'error');
+    } finally {
+      setPasswordLoading(false);
+    }
   };
 
   // 5. Logout handler
@@ -434,10 +470,15 @@ export default function AccountSettingsPage() {
           {activeTab === 'security' && (
             <div className="bg-card border border-border rounded-3xl p-6 shadow-sm space-y-5">
               <div className="border-b border-border pb-3">
-                <h3 className="font-extrabold text-base italic flex items-center gap-2 text-primary">
-                  <KeyRound className="w-4 h-4" /> Pengaturan Keamanan &amp; Kata Sandi
+                <h3 className="text-base font-extrabold text-foreground flex items-center gap-2">
+                  <Shield className="w-5 h-5 text-primary" />
+                  {activeUser.has_password === false ? 'Buat Kata Sandi Akun' : 'Ubah Kata Sandi'}
                 </h3>
-                <p className="text-xs text-muted-foreground mt-0.5">Ubah kata sandi akun EduVerse kamu secara aman.</p>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  {activeUser.has_password === false
+                    ? 'Akun Anda saat ini masuk via Google. Buat kata sandi untuk bisa masuk menggunakan email & kata sandi secara langsung.'
+                    : 'Ubah kata sandi akun EduVerse kamu secara aman.'}
+                </p>
               </div>
 
               {passwordError && (
@@ -455,29 +496,31 @@ export default function AccountSettingsPage() {
               )}
 
               <form onSubmit={handlePasswordSubmit} className="space-y-4">
-                <div>
-                  <label className="block text-xs font-bold text-muted-foreground uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
-                    <Lock className="w-3.5 h-3.5 text-primary" /> Kata Sandi Saat Ini
-                  </label>
-                  <div className="relative">
-                    <input
-                      type={showCurrentPassword ? 'text' : 'password'}
-                      required
-                      placeholder="••••••••"
-                      value={currentPassword}
-                      onChange={(e) => setCurrentPassword(e.target.value)}
-                      className="w-full bg-background border border-border rounded-2xl pl-4 pr-11 py-3 text-xs focus:outline-none focus:border-primary transition-colors"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowCurrentPassword(!showCurrentPassword)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors p-1"
-                      aria-label={showCurrentPassword ? 'Sembunyikan kata sandi' : 'Tampilkan kata sandi'}
-                    >
-                      {showCurrentPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                    </button>
+                {activeUser.has_password !== false && (
+                  <div>
+                    <label className="block text-xs font-bold text-muted-foreground uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
+                      <Lock className="w-3.5 h-3.5 text-primary" /> Kata Sandi Saat Ini
+                    </label>
+                    <div className="relative">
+                      <input
+                        type={showCurrentPassword ? 'text' : 'password'}
+                        required
+                        placeholder="••••••••"
+                        value={currentPassword}
+                        onChange={(e) => setCurrentPassword(e.target.value)}
+                        className="w-full bg-background border border-border rounded-2xl pl-4 pr-11 py-3 text-xs focus:outline-none focus:border-primary transition-colors"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowCurrentPassword(!showCurrentPassword)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors p-1"
+                        aria-label={showCurrentPassword ? 'Sembunyikan kata sandi' : 'Tampilkan kata sandi'}
+                      >
+                        {showCurrentPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      </button>
+                    </div>
                   </div>
-                </div>
+                )}
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
@@ -537,9 +580,33 @@ export default function AccountSettingsPage() {
                   icon={Lock}
                   className="w-full sm:w-auto bg-gradient-to-r from-primary to-primary-glow text-white font-extrabold py-3.5 px-8 rounded-2xl text-xs shadow-glow active:scale-95 transition-all flex items-center justify-center gap-2 cursor-pointer"
                 >
-                  Perbarui Kata Sandi
+                  {activeUser.has_password === false ? 'Buat Kata Sandi' : 'Perbarui Kata Sandi'}
                 </Button>
               </form>
+
+              {/* Zona Berbahaya - Hapus Akun */}
+              <div className="pt-6 border-t border-border mt-8">
+                <div className="p-5 rounded-2xl border border-danger/30 bg-danger/5 space-y-3">
+                  <div className="flex items-center gap-2 text-danger font-extrabold text-sm">
+                    <AlertCircle className="w-4 h-4 shrink-0" />
+                    <span>Zona Berbahaya</span>
+                  </div>
+                  <p className="text-xs text-muted-foreground leading-relaxed">
+                    Menghapus akun akan menghapus seluruh data profil, kelas yang Anda buat, materi, serta riwayat kuis dan XP secara permanen dari database. Tindakan ini tidak dapat dibatalkan.
+                  </p>
+                  <div>
+                    <Button
+                      type="button"
+                      variant="danger"
+                      icon={Trash2}
+                      onClick={() => setIsDeleteAccountModalOpen(true)}
+                      className="bg-danger hover:bg-danger/90 text-white font-extrabold py-3 px-6 rounded-2xl text-xs shadow-md transition-all active:scale-95 cursor-pointer flex items-center gap-2"
+                    >
+                      Hapus Akun Saya
+                    </Button>
+                  </div>
+                </div>
+              </div>
             </div>
           )}
 
@@ -630,6 +697,19 @@ export default function AccountSettingsPage() {
         cancelText="Batal"
         variant="danger"
         icon={LogOut}
+      />
+
+      <ConfirmModal
+        isOpen={isDeleteAccountModalOpen}
+        onClose={() => setIsDeleteAccountModalOpen(false)}
+        onConfirm={handleDeleteAccount}
+        title="Hapus Akun Permanen?"
+        description="PERINGATAN: Apakah Anda yakin ingin menghapus akun ini secara permanen dari EduVerse? Seluruh data profil, kelas yang Anda miliki, materi, dan riwayat belajar Anda akan terhapus dari database dan tidak dapat dipulihkan."
+        confirmText="Ya, Hapus Akun"
+        loadingText="Menghapus Akun..."
+        cancelText="Batal"
+        variant="danger"
+        icon={Trash2}
       />
     </section>
   );
