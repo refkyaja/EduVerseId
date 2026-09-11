@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { LogIn, UserPlus, Sparkles, AlertCircle, Lock, Mail, User, AtSign, CheckCircle2, Eye, EyeOff } from 'lucide-react';
+import Button from './Button';
 import { useAppState } from '../context/AppStateContext';
 
 export default function AuthModal({ isOpen, onClose }) {
@@ -198,17 +199,17 @@ export default function AuthModal({ isOpen, onClose }) {
                   </div>
                 </div>
 
-                <button
+                <Button
                   type="submit"
-                  disabled={loading}
+                  loading={loading}
+                  loadingText="Memverifikasi..."
                   className="w-full bg-primary text-primary-foreground font-extrabold py-2.5 rounded-xl text-xs shadow-glow flex items-center justify-center gap-2 cursor-pointer hover:scale-[1.01] transition-all"
                 >
-                  {loading ? 'Memproses Login...' : 'Masuk ke EduVerse'}
-                </button>
+                  Masuk ke EduVerse
+                </Button>
               </form>
             )}
 
-            {/* REGISTER FORM */}
             {mode === 'register' && (
               <form onSubmit={handleRegisterSubmit} className="space-y-3">
                 <div>
@@ -300,13 +301,14 @@ export default function AuthModal({ isOpen, onClose }) {
                   </div>
                 </div>
 
-                <button
+                <Button
                   type="submit"
-                  disabled={loading}
+                  loading={loading}
+                  loadingText="Mendaftarkan Akun..."
                   className="w-full bg-primary text-primary-foreground font-extrabold py-2.5 rounded-xl text-xs shadow-glow flex items-center justify-center gap-2 cursor-pointer hover:scale-[1.01] transition-all mt-2"
                 >
-                  {loading ? 'Mendaftarkan Akun...' : 'Daftar Akun Baru'}
-                </button>
+                  Daftar Akun Baru
+                </Button>
               </form>
             )}
           </>

@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { X, LogIn, KeyRound } from 'lucide-react';
+import { X, LogIn, KeyRound, Loader2 } from 'lucide-react';
 import { useAppState } from '../context/AppStateContext';
+import Button from './Button';
 
 export default function JoinClassModal({ isOpen, onClose, onJoinClass }) {
   const { showToast, fetchUserClasses } = useAppState();
@@ -53,7 +54,7 @@ export default function JoinClassModal({ isOpen, onClose, onJoinClass }) {
   return createPortal(
     <div className="fixed inset-0 z-[55] flex items-end md:items-center justify-center bg-black/60 backdrop-blur-sm animate-fade-in p-0 md:p-4">
       {/* Backdrop */}
-      <div onClick={onClose} onTouchMove={(e) => e.preventDefault()} className="absolute inset-0 touch-none" />
+      <div onClick={!loading ? onClose : undefined} onTouchMove={(e) => e.preventDefault()} className="absolute inset-0 touch-none" />
 
       {/* Modal Dialog */}
       <div className="relative w-full max-w-full md:max-w-md bg-card rounded-t-3xl md:rounded-3xl z-[60] flex flex-col max-h-[90vh] overflow-hidden shadow-2xl border border-border animate-scale-in">
@@ -74,8 +75,9 @@ export default function JoinClassModal({ isOpen, onClose, onJoinClass }) {
             </div>
           </div>
           <button
-            onClick={onClose}
-            className="w-9 h-9 rounded-xl bg-muted flex items-center justify-center hover:bg-muted/80 transition-colors cursor-pointer"
+            onClick={!loading ? onClose : undefined}
+            disabled={loading}
+            className="w-9 h-9 rounded-xl bg-muted flex items-center justify-center hover:bg-muted/80 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <X className="w-4 h-4" />
           </button>
@@ -90,11 +92,12 @@ export default function JoinClassModal({ isOpen, onClose, onJoinClass }) {
             <input
               type="text"
               required
+              disabled={loading}
               maxLength={8}
               placeholder="Contoh: ABCD123"
               value={code}
               onChange={(e) => setCode(e.target.value.toUpperCase())}
-              className="w-full bg-background border border-border rounded-xl px-4 py-3 font-mono font-bold text-center text-xl tracking-widest text-primary focus:outline-none focus:border-primary transition-colors uppercase shadow-inner"
+              className="w-full bg-background border border-border rounded-xl px-4 py-3 font-mono font-bold text-center text-xl tracking-widest text-primary focus:outline-none focus:border-primary transition-colors uppercase shadow-inner disabled:opacity-60 disabled:cursor-not-allowed"
             />
             <p className="text-[11px] text-muted-foreground mt-2 leading-relaxed text-center">
               Minta kode unik kelas (contoh: <span className="font-mono font-bold text-foreground">ABCD123</span>) dari pembuat kelas.
@@ -102,17 +105,19 @@ export default function JoinClassModal({ isOpen, onClose, onJoinClass }) {
           </div>
 
           <div className="pt-2">
-            <button
+            <Button
               type="submit"
               disabled={!code.trim()}
+              loading={loading}
+              loadingText="Bergabung ke Kelas..."
               className={`w-full font-extrabold py-3.5 rounded-xl text-sm shadow-md transition-all flex items-center justify-center gap-2 ${
-                code.trim()
-                  ? 'bg-gradient-to-r from-primary to-primary-glow text-primary-foreground shadow-glow active:scale-95 cursor-pointer'
-                  : 'bg-muted text-muted-foreground cursor-not-allowed'
+                !code.trim()
+                  ? 'bg-muted text-muted-foreground cursor-not-allowed'
+                  : 'bg-gradient-to-r from-primary to-primary-glow text-primary-foreground shadow-glow active:scale-95 cursor-pointer'
               }`}
             >
               Gabung Kelas Sekarang
-            </button>
+            </Button>
           </div>
         </form>
       </div>

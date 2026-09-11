@@ -92,7 +92,7 @@ class ClassController extends Controller
         if (Gate::denies('view', $class)) {
             return response()->json([
                 'status' => 'error',
-                'message' => 'Anda tidak memiliki akses ke kelas private ini',
+                'message' => 'Anda tidak memiliki akses ke kelas ini',
             ], 403);
         }
 
@@ -170,6 +170,15 @@ class ClassController extends Controller
         $newCode = ClassModel::generateUniqueCode();
         $class->update(['code' => $newCode]);
 
+        try {
+            LogAktivitas::create([
+                'kelas_id' => $class->id,
+                'user_id' => $request->user()->id,
+                'peran_user' => 'OWNER',
+                'deskripsi_aksi' => 'Membuat ulang kode kelas',
+            ]);
+        } catch (\Throwable $e) {}
+
         return response()->json([
             'status' => 'success',
             'message' => 'Kode kelas berhasil dibuat ulang',
@@ -179,9 +188,6 @@ class ClassController extends Controller
         ]);
     }
 
-    /**
-     * Update class information (Owner only).
-     */
     public function update(UpdateClassRequest $request, $id): JsonResponse
     {
         $class = ClassModel::find($id);
@@ -202,6 +208,15 @@ class ClassController extends Controller
 
         $class->update($request->validated());
 
+        try {
+            LogAktivitas::create([
+                'kelas_id' => $class->id,
+                'user_id' => $request->user()->id,
+                'peran_user' => 'OWNER',
+                'deskripsi_aksi' => 'Memperbarui informasi kelas "' . $class->name . '"',
+            ]);
+        } catch (\Throwable $e) {}
+
         return response()->json([
             'status' => 'success',
             'message' => 'Informasi kelas berhasil diperbarui',
@@ -209,9 +224,6 @@ class ClassController extends Controller
         ]);
     }
 
-    /**
-     * Delete a class (Owner only).
-     */
     public function destroy(Request $request, $id): JsonResponse
     {
         $class = ClassModel::find($id);
@@ -229,6 +241,16 @@ class ClassController extends Controller
                 'message' => 'Hanya Owner yang dapat menghapus kelas',
             ], 403);
         }
+
+        $className = $class->name;
+        try {
+            LogAktivitas::create([
+                'kelas_id' => $class->id,
+                'user_id' => $request->user()->id,
+                'peran_user' => 'OWNER',
+                'deskripsi_aksi' => 'Menghapus ruang kelas "' . $className . '"',
+            ]);
+        } catch (\Throwable $e) {}
 
         $class->delete();
 

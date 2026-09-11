@@ -1,17 +1,20 @@
 import React, { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
-import { Users, ShieldCheck, UserCheck, UserX, Loader2, Search, X } from 'lucide-react';
+import { Users, ShieldCheck, UserCheck, UserX, Loader2, Search, X, Crown } from 'lucide-react';
 import { useAppState } from '../context/AppStateContext';
 import { apiService } from '../services/apiService';
 import ConfirmModal from '../components/ConfirmModal';
+import Button from '../components/Button';
 
-export default function ClassAnggotaPage({ members = [], currentRole = 'member', isManagementMode = false, onToggleAdmin, onKickMember, isLoading = false }) {
+export default function ClassAnggotaPage({ members = [], currentRole = 'member', isManagementMode = false, onToggleAdmin, onKickMember, onTransferOwner, isLoading = false }) {
   const { classId } = useParams();
   const { currentUser, showToast } = useAppState();
   const [memberToKick, setMemberToKick] = useState(null);
+  const [memberToTransfer, setMemberToTransfer] = useState(null);
   const [internalMembers, setInternalMembers] = useState(members);
   const [loading, setLoading] = useState(isLoading);
   const [searchQuery, setSearchQuery] = useState('');
+  const [updatingMemberId, setUpdatingMemberId] = useState(null);
 
   const isOwner = currentRole === 'owner';
   const isAdmin = currentRole === 'admin';
@@ -59,22 +62,26 @@ export default function ClassAnggotaPage({ members = [], currentRole = 'member',
     }
   }, [classId, members, currentUser, currentRole]);
 
-  const handleAdminToggle = (mem) => {
-    if (!isOwner) return;
+  const handleAdminToggle = async (mem) => {
+    if (!isOwner || updatingMemberId) return;
     const newRole = mem.role === 'Admin' || mem.role === 'admin' ? 'Member' : 'Admin';
-    if (onToggleAdmin) {
-      onToggleAdmin(mem.id, newRole);
-    } else if (classId) {
-      const action = (newRole === 'Admin' || newRole === 'admin')
-        ? apiService.promoteMember(classId, mem.id)
-        : apiService.demoteAdmin(classId, mem.id);
-      
-      action.then(() => {
+    setUpdatingMemberId(mem.id);
+    try {
+      if (onToggleAdmin) {
+        await onToggleAdmin(mem.id, newRole);
+      } else if (classId) {
+        if (newRole === 'Admin' || newRole === 'admin') {
+          await apiService.promoteMember(classId, mem.id);
+        } else {
+          await apiService.demoteAdmin(classId, mem.id);
+        }
         setInternalMembers(prev => prev.map(m => m.id === mem.id ? { ...m, role: newRole } : m));
         showToast(`Role ${mem.name} diperbarui menjadi ${newRole}`);
-      }).catch(err => {
-        showToast(err.message || 'Gagal mengubah role', 'error');
-      });
+      }
+    } catch (err) {
+      showToast(err.message || 'Gagal mengubah role', 'error');
+    } finally {
+      setUpdatingMemberId(null);
     }
   };
 
@@ -83,21 +90,51 @@ export default function ClassAnggotaPage({ members = [], currentRole = 'member',
     setMemberToKick(mem);
   };
 
-  const confirmKick = () => {
+  const confirmKick = async () => {
     if (memberToKick) {
-      if (onKickMember) {
-        onKickMember(memberToKick.id);
-      } else if (classId) {
-        apiService.kickMember(classId, memberToKick.id)
-          .then(() => {
-            setInternalMembers(prev => prev.filter(m => m.id !== memberToKick.id));
-            showToast(`${memberToKick.name} berhasil dikeluarkan dari kelas.`);
-          })
-          .catch(err => {
-            showToast(err.message || 'Gagal mengeluarkan anggota', 'error');
-          });
+      try {
+        if (onKickMember) {
+          await onKickMember(memberToKick.id);
+        } else if (classId) {
+          await apiService.kickMember(classId, memberToKick.id);
+          setInternalMembers(prev => prev.filter(m => m.id !== memberToKick.id));
+          showToast(`${memberToKick.name} berhasil dikeluarkan dari kelas.`);
+        }
+      } catch (err) {
+        showToast(err.message || 'Gagal mengeluarkan anggota', 'error');
+      } finally {
+        setMemberToKick(null);
       }
-      setMemberToKick(null);
+    }
+  };
+
+  const handleTransferClick = (mem) => {
+    setMemberToTransfer(mem);
+  };
+
+  const confirmTransfer = async () => {
+    if (!memberToTransfer) return;
+    try {
+      if (onTransferOwner) {
+        await onTransferOwner(memberToTransfer);
+      } else if (classId) {
+        const targetUserId = memberToTransfer.user_id || memberToTransfer.userId || memberToTransfer.id;
+        await apiService.transferOwnership(classId, targetUserId);
+        showToast(`Kepemilikan kelas berhasil dipindahkan ke ${memberToTransfer.name || 'anggota'}.`);
+        setInternalMembers(prev => prev.map(m => {
+          if ((m.user_id || m.userId || m.id) === targetUserId) {
+            return { ...m, role: 'owner' };
+          }
+          if (m.role === 'owner') {
+            return { ...m, role: 'admin' };
+          }
+          return m;
+        }));
+      }
+    } catch (err) {
+      showToast(err.message || 'Gagal mentransfer kepemilikan', 'error');
+    } finally {
+      setMemberToTransfer(null);
     }
   };
 
@@ -206,8 +243,10 @@ export default function ClassAnggotaPage({ members = [], currentRole = 'member',
                 {isManagementMode && canManageMembers && !isMemOwner && (
                   <div className="flex items-center justify-end gap-2 shrink-0 w-full sm:w-auto pt-2 sm:pt-0 border-t sm:border-0 border-border/50">
                     {isOwner && (
-                      <button
+                      <Button
                         onClick={() => handleAdminToggle(mem)}
+                        loading={updatingMemberId === mem.id}
+                        loadingText="Menyimpan Perubahan..."
                         className={`font-bold px-3 py-1.5 rounded-xl text-xs transition-colors whitespace-nowrap cursor-pointer ${
                           isMemAdmin
                             ? 'bg-amber-500/10 text-amber-500 hover:bg-amber-500/20'
@@ -215,6 +254,16 @@ export default function ClassAnggotaPage({ members = [], currentRole = 'member',
                         }`}
                       >
                         {isMemAdmin ? 'Jadikan Member' : 'Jadikan Admin'}
+                      </Button>
+                    )}
+                    {isOwner && (
+                      <button
+                        onClick={() => handleTransferClick(mem)}
+                        className="font-bold px-3 py-1.5 rounded-xl text-xs transition-colors whitespace-nowrap cursor-pointer bg-gradient-to-r from-amber-500/15 to-yellow-500/15 hover:from-amber-500/25 hover:to-yellow-500/25 text-amber-500 border border-amber-500/30 flex items-center gap-1.5"
+                        title="Transfer Kepemilikan Kelas ke Anggota Ini"
+                      >
+                        <Crown className="w-3.5 h-3.5" />
+                        <span>Transfer Owner</span>
                       </button>
                     )}
                     <button
@@ -243,6 +292,19 @@ export default function ClassAnggotaPage({ members = [], currentRole = 'member',
         title="Keluarkan Anggota?"
         description={`Apakah Anda yakin ingin mengeluarkan "${memberToKick?.name}" dari kelas ini?`}
         confirmText="Ya, Keluarkan"
+        loadingText="Mengeluarkan Anggota..."
+        cancelText="Batal"
+        variant="danger"
+      />
+
+      <ConfirmModal
+        isOpen={Boolean(memberToTransfer)}
+        onClose={() => setMemberToTransfer(null)}
+        onConfirm={confirmTransfer}
+        title="Transfer Kepemilikan Kelas?"
+        description={`Apakah Anda yakin ingin memindahkan kepemilikan kelas ini ke "${memberToTransfer?.name}"? Anda akan diturunkan menjadi Admin dan kehilangan kendali penuh atas kelas ini.`}
+        confirmText="Ya, Transfer Kepemilikan"
+        loadingText="Mentransfer..."
         cancelText="Batal"
         variant="danger"
       />

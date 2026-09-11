@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, CheckCircle2, Clock, AlertCircle, XCircle, Edit3, Sparkles, User, History } from 'lucide-react';
 import MaterialVersionDropdown from '../components/MaterialVersionDropdown';
+import Button from '../components/Button';
 import { useAppState } from '../context/AppStateContext';
 
 export default function MaterialDetailPage({ materials, currentRole, onUpdateMaterialStatus, onEditMaterialContent }) {
@@ -14,6 +15,8 @@ export default function MaterialDetailPage({ materials, currentRole, onUpdateMat
   const [selectedVersion, setSelectedVersion] = useState(null);
   const [isEditing, setIsEditing] = useState(false);
   const [editContent, setEditContent] = useState('');
+  const [isSaving, setIsSaving] = useState(false);
+  const [verifyingStatus, setVerifyingStatus] = useState(null);
 
   if (!material) {
     return (
@@ -54,18 +57,32 @@ export default function MaterialDetailPage({ materials, currentRole, onUpdateMat
     setIsEditing(true);
   };
 
-  const handleSaveEdit = (e) => {
+  const handleSaveEdit = async (e) => {
     e.preventDefault();
     if (!editContent.trim()) return;
 
-    onEditMaterialContent(material.id, editContent.trim(), currentRole);
-    showToast(isOwner ? "Versi baru berhasil diterbitkan & terverifikasi!" : "Versi baru dibuat! Menunggu verifikasi Owner.");
-    setIsEditing(false);
+    try {
+      setIsSaving(true);
+      await onEditMaterialContent(material.id, editContent.trim(), currentRole);
+      showToast(isOwner ? "Versi baru berhasil diterbitkan & terverifikasi!" : "Versi baru dibuat! Menunggu verifikasi Owner.");
+      setIsEditing(false);
+    } catch (err) {
+      showToast("Gagal menyimpan versi materi.", "error");
+    } finally {
+      setIsSaving(false);
+    }
   };
 
-  const handleOwnerAction = (newStatus) => {
-    onUpdateMaterialStatus(material.id, newStatus);
-    showToast(`Status materi diperbarui menjadi: ${newStatus}`);
+  const handleOwnerAction = async (newStatus) => {
+    try {
+      setVerifyingStatus(newStatus);
+      await onUpdateMaterialStatus(material.id, newStatus);
+      showToast(`Status materi diperbarui menjadi: ${newStatus}`);
+    } catch (err) {
+      showToast("Gagal memperbarui status materi.", "error");
+    } finally {
+      setVerifyingStatus(null);
+    }
   };
 
   return (
@@ -123,30 +140,35 @@ export default function MaterialDetailPage({ materials, currentRole, onUpdateMat
               Materi dibuat atau diubah oleh Admin. Pilih tindakan verifikasi untuk menyetujui versi ini:
             </p>
             <div className="flex gap-2 pt-1 flex-wrap">
-              <button
+              <Button
                 onClick={() => handleOwnerAction('Terverifikasi')}
+                loading={verifyingStatus === 'Terverifikasi'}
+                loadingText="Menyetujui..."
                 className="bg-success text-white font-extrabold px-4 py-2 rounded-xl text-xs shadow-sm flex items-center gap-1 cursor-pointer"
               >
                 <CheckCircle2 className="w-3.5 h-3.5" /> Setujui (Terverifikasi)
-              </button>
-              <button
+              </Button>
+              <Button
                 onClick={() => handleOwnerAction('Perlu Perbaikan')}
+                loading={verifyingStatus === 'Perlu Perbaikan'}
+                loadingText="Memproses..."
                 className="bg-amber-500 text-white font-extrabold px-4 py-2 rounded-xl text-xs shadow-sm flex items-center gap-1 cursor-pointer"
               >
                 <AlertCircle className="w-3.5 h-3.5" /> Minta Perbaikan
-              </button>
-              <button
+              </Button>
+              <Button
                 onClick={() => handleOwnerAction('Ditolak')}
+                loading={verifyingStatus === 'Ditolak'}
+                loadingText="Menolak..."
                 className="bg-danger text-white font-extrabold px-4 py-2 rounded-xl text-xs shadow-sm flex items-center gap-1 cursor-pointer"
               >
                 <XCircle className="w-3.5 h-3.5" /> Tolak
-              </button>
+              </Button>
             </div>
           </div>
         )}
       </div>
 
-      {/* Edit Form or Display Content */}
       <div className="bg-card border border-border rounded-3xl p-6 md:p-8 shadow-sm space-y-4">
         <div className="flex items-center justify-between border-b border-border pb-3">
           <div className="flex items-center gap-2">
@@ -184,12 +206,14 @@ export default function MaterialDetailPage({ materials, currentRole, onUpdateMat
               >
                 Batal
               </button>
-              <button
+              <Button
                 type="submit"
+                loading={isSaving}
+                loadingText="Menyimpan Materi..."
                 className="bg-gradient-to-r from-primary to-primary-glow text-white font-extrabold px-5 py-2 rounded-xl text-xs shadow-glow flex items-center gap-1"
               >
                 Terbitkan Versi Baru
-              </button>
+              </Button>
             </div>
           </form>
         ) : (

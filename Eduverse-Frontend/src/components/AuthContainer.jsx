@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAppState } from '../context/AppStateContext';
+import { authService } from '../services/authService';
 import companionImg from '../assets/companion.png';
 
 export default function AuthContainer({ initialMode = 'login' }) {
@@ -25,7 +26,9 @@ export default function AuthContainer({ initialMode = 'login' }) {
   const [showPasswordDaftar, setShowPasswordDaftar] = useState(false);
   const [showUlangiDaftar, setShowUlangiDaftar] = useState(false);
   const [loadingDaftar, setLoadingDaftar] = useState(false);
-  const [pesanDaftar, setPesanDaftar] = useState(null); // { text, tipe }
+  const [pesanDaftar, setPesanDaftar] = useState(null);
+  const [feedbackUsername, setFeedbackUsername] = useState(null);
+  const [usernameDisentuh, setUsernameDisentuh] = useState(false);
 
   // Toast System State
   const [toasts, setToasts] = useState([]);
@@ -40,6 +43,78 @@ export default function AuthContainer({ initialMode = 'login' }) {
     }, 150);
     return () => clearTimeout(timer);
   }, [initialMode]);
+
+  useEffect(() => {
+    let aktif = true;
+    const nilai = usernameDaftar.trim();
+
+    if (!nilai) {
+      if (usernameDisentuh) {
+        setFeedbackUsername({
+          tipe: 'error',
+          teks: 'Username wajib diisi.'
+        });
+      } else {
+        setFeedbackUsername(null);
+      }
+      return () => {
+        aktif = false;
+      };
+    }
+
+    if (nilai.length < 3) {
+      setFeedbackUsername({
+        tipe: 'error',
+        teks: 'Username minimal 3 karakter.'
+      });
+      return () => {
+        aktif = false;
+      };
+    }
+
+    const regex = /^[a-zA-Z0-9_-]+$/;
+    if (!regex.test(nilai)) {
+      setFeedbackUsername({
+        tipe: 'error',
+        teks: 'Username hanya boleh berisi huruf, angka, tanda hubung, dan garis bawah.'
+      });
+      return () => {
+        aktif = false;
+      };
+    }
+
+    setFeedbackUsername({
+      tipe: 'loading',
+      teks: 'Memeriksa ketersediaan...'
+    });
+
+    const timer = setTimeout(async () => {
+      try {
+        const res = await authService.checkUsername(nilai);
+        if (!aktif) return;
+        if (usernameDaftar.trim() !== nilai) return;
+        if (res && res.available) {
+          setFeedbackUsername({
+            tipe: 'tersedia',
+            teks: 'Username tersedia'
+          });
+        } else {
+          setFeedbackUsername({
+            tipe: 'error',
+            teks: res?.message || 'Username sudah digunakan, coba yang lain.'
+          });
+        }
+      } catch (err) {
+        if (!aktif) return;
+        setFeedbackUsername(null);
+      }
+    }, 450);
+
+    return () => {
+      aktif = false;
+      clearTimeout(timer);
+    };
+  }, [usernameDaftar, usernameDisentuh]);
 
   // Particle Canvas Background Logic
   useEffect(() => {
@@ -202,6 +277,8 @@ export default function AuthContainer({ initialMode = 'login' }) {
     setActiveClass(nextMode);
     setPesanMasuk(null);
     setPesanDaftar(null);
+    setFeedbackUsername(null);
+    setUsernameDisentuh(false);
     if (nextMode === 'sign-up') {
       window.history.pushState({}, '', '/register');
     } else {
@@ -254,6 +331,19 @@ export default function AuthContainer({ initialMode = 'login' }) {
       setPesanDaftar({ text: 'Nama lengkap wajib diisi.', tipe: 'gagal' });
       return;
     }
+    if (!usernameDaftar.trim()) {
+      setUsernameDisentuh(true);
+      setFeedbackUsername({
+        tipe: 'error',
+        teks: 'Username wajib diisi.'
+      });
+      setPesanDaftar({ text: 'Username wajib diisi.', tipe: 'gagal' });
+      return;
+    }
+    if (feedbackUsername && feedbackUsername.tipe === 'error') {
+      setPesanDaftar({ text: feedbackUsername.teks, tipe: 'gagal' });
+      return;
+    }
     if (!emailDaftar.trim()) {
       setPesanDaftar({ text: 'Email wajib diisi.', tipe: 'gagal' });
       return;
@@ -274,15 +364,13 @@ export default function AuthContainer({ initialMode = 'login' }) {
 
     setLoadingDaftar(true);
 
-    const finalUsername = (usernameDaftar.trim() || emailDaftar.split('@')[0])
-      .toLowerCase()
-      .replace(/[^a-z0-9_]/g, '');
+    const finalUsername = usernameDaftar.trim();
 
     try {
       await registerUser({
-        name: namaDaftar,
+        name: namaDaftar.trim(),
         username: finalUsername,
-        email: emailDaftar,
+        email: emailDaftar.trim(),
         password: passwordDaftar,
         password_confirmation: ulangiDaftar,
       });
@@ -294,6 +382,12 @@ export default function AuthContainer({ initialMode = 'login' }) {
         setEmailMasuk(emailDaftar);
       }, 1100);
     } catch (err) {
+      if (err.errors && err.errors.username && err.errors.username.length > 0) {
+        setFeedbackUsername({
+          tipe: 'error',
+          teks: err.errors.username[0]
+        });
+      }
       const errorMsg = err.message || 'Pendaftaran gagal. Periksa kembali data yang dimasukkan.';
       setPesanDaftar({ text: errorMsg, tipe: 'gagal' });
       addToast('Gagal Mendaftar', errorMsg, 'peringatan');
@@ -364,9 +458,47 @@ export default function AuthContainer({ initialMode = 'login' }) {
                       placeholder="Username"
                       autoComplete="username"
                       value={usernameDaftar}
-                      onChange={(e) => setUsernameDaftar(e.target.value)}
+                      onBlur={() => {
+                        setUsernameDisentuh(true);
+                        if (!usernameDaftar.trim()) {
+                          setFeedbackUsername({
+                            tipe: 'error',
+                            teks: 'Username wajib diisi.'
+                          });
+                        }
+                      }}
+                      onChange={(e) => {
+                        setUsernameDisentuh(true);
+                        setUsernameDaftar(e.target.value);
+                      }}
+                      className={
+                        feedbackUsername
+                          ? feedbackUsername.tipe === 'error'
+                            ? 'has-error'
+                            : feedbackUsername.tipe === 'tersedia'
+                            ? 'has-success'
+                            : ''
+                          : ''
+                      }
                     />
                   </div>
+                  {feedbackUsername && (
+                    <div
+                      id="pesanValidasiUsername"
+                      className={`field-feedback ${feedbackUsername.tipe}`}
+                    >
+                      <i
+                        className={`bx ${
+                          feedbackUsername.tipe === 'tersedia'
+                            ? 'bx-check-circle'
+                            : feedbackUsername.tipe === 'loading'
+                            ? 'bx-loader-alt bx-spin'
+                            : 'bx-x-circle'
+                        }`}
+                      ></i>
+                      <span>{feedbackUsername.teks}</span>
+                    </div>
+                  )}
                   <div className="input-group">
                     <i className="bx bx-envelope field-icon"></i>
                     <input
@@ -436,7 +568,7 @@ export default function AuthContainer({ initialMode = 'login' }) {
                     {loadingDaftar ? (
                       <>
                         <i className="bx bx-loader-alt bx-spin"></i>
-                        <span>Mendaftarkan akun...</span>
+                        <span>Mendaftarkan Akun...</span>
                       </>
                     ) : (
                       <>
@@ -527,7 +659,7 @@ export default function AuthContainer({ initialMode = 'login' }) {
                     {loadingMasuk ? (
                       <>
                         <i className="bx bx-loader-alt bx-spin"></i>
-                        <span>Memproses...</span>
+                        <span>Memverifikasi...</span>
                       </>
                     ) : (
                       <>

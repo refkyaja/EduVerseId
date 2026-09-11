@@ -46,12 +46,54 @@ export function getLevelInfo(totalXp = 0) {
   };
 }
 
+function migrateLegacyStorage() {
+  try {
+    const legacyGlobal = localStorage.getItem('eduquest_state');
+    if (legacyGlobal) {
+      if (!localStorage.getItem('eduverse_state')) {
+        localStorage.setItem('eduverse_state', legacyGlobal);
+      }
+      localStorage.removeItem('eduquest_state');
+    }
+
+    const legacyKeys = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key && key.indexOf('eduquest_') === 0) {
+        legacyKeys.push(key);
+      }
+    }
+
+    for (let i = 0; i < legacyKeys.length; i++) {
+      const oldKey = legacyKeys[i];
+      const newKey = oldKey.replace('eduquest_', 'eduverse_');
+      const oldValue = localStorage.getItem(oldKey);
+      if (!localStorage.getItem(newKey) && oldValue) {
+        localStorage.setItem(newKey, oldValue);
+      }
+      localStorage.removeItem(oldKey);
+    }
+  } catch (e) {
+    console.error("Migrasi storage gagal:", e);
+  }
+}
+
+migrateLegacyStorage();
+
 export function AppStateProvider({ children }) {
   const loadStateForUser = (user) => {
     if (!user || !user.id) return INITIAL_STATE;
-    const userKey = `eduquest_state_${user.id}`;
+    const userKey = `eduverse_state_${user.id}`;
+    const legacyUserKey = `eduquest_state_${user.id}`;
     try {
-      const stored = localStorage.getItem(userKey);
+      let stored = localStorage.getItem(userKey);
+      if (!stored) {
+        stored = localStorage.getItem(legacyUserKey) || localStorage.getItem('eduverse_state') || localStorage.getItem('eduquest_state');
+        if (stored) {
+          localStorage.setItem(userKey, stored);
+          localStorage.removeItem(legacyUserKey);
+        }
+      }
       if (stored) {
         return { ...INITIAL_STATE, ...JSON.parse(stored) };
       }
@@ -73,10 +115,9 @@ export function AppStateProvider({ children }) {
   const [appState, setAppState] = useState(() => loadStateForUser(currentUser));
   const [toastMessage, setToastMessage] = useState(null);
 
-  // Sync state to user-scoped localStorage
   useEffect(() => {
     try {
-      const key = currentUser?.id ? `eduquest_state_${currentUser.id}` : 'eduquest_state';
+      const key = currentUser?.id ? `eduverse_state_${currentUser.id}` : 'eduverse_state';
       localStorage.setItem(key, JSON.stringify(appState));
     } catch (e) {
       console.error("Failed to save state:", e);
@@ -237,7 +278,12 @@ export function AppStateProvider({ children }) {
     localStorage.removeItem('eduverse_user_classes');
     localStorage.removeItem('eduverse_materi');
     localStorage.removeItem('eduverse_quizzes');
+    localStorage.removeItem('eduverse_state');
     localStorage.removeItem('eduquest_state');
+    if (currentUser && currentUser.id) {
+      localStorage.removeItem(`eduverse_state_${currentUser.id}`);
+      localStorage.removeItem(`eduquest_state_${currentUser.id}`);
+    }
     localStorage.removeItem('eduverse_user');
     localStorage.removeItem('eduverse_token');
     showToast("Anda telah keluar dari akun.");

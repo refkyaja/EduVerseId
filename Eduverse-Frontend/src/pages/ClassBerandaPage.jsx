@@ -1,29 +1,39 @@
 import React, { useState } from 'react';
 import { Megaphone, Plus, Clock, User, Sparkles } from 'lucide-react';
 import { useAppState } from '../context/AppStateContext';
+import Button from '../components/Button';
 
 export default function ClassBerandaPage({ cls, announcements, currentRole, onAddAnnouncement }) {
   const { showToast } = useAppState();
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
   const [isAdding, setIsAdding] = useState(false);
+  const [isPosting, setIsPosting] = useState(false);
 
   const canPost = currentRole === 'owner' || currentRole === 'admin';
   const classAncs = announcements?.filter(a => a.classId === cls?.id) || announcements || [];
 
-  const handlePostAnnouncement = (e) => {
+  const handlePostAnnouncement = async (e) => {
     e.preventDefault();
-    if (!title.trim() || !content.trim()) return;
+    if (!title.trim() || !content.trim() || isPosting) return;
 
-    onAddAnnouncement({
-      title: title.trim(),
-      content: content.trim(),
-    });
-
-    showToast("Pengumuman baru berhasil dipublikasikan!");
-    setTitle('');
-    setContent('');
-    setIsAdding(false);
+    setIsPosting(true);
+    try {
+      if (onAddAnnouncement) {
+        await onAddAnnouncement({
+          title: title.trim(),
+          content: content.trim(),
+        });
+      }
+      showToast("Pengumuman baru berhasil dipublikasikan!");
+      setTitle('');
+      setContent('');
+      setIsAdding(false);
+    } catch (err) {
+      showToast(err.message || "Gagal mempublikasikan pengumuman", 'error');
+    } finally {
+      setIsPosting(false);
+    }
   };
 
   return (
@@ -73,12 +83,14 @@ export default function ClassBerandaPage({ cls, announcements, currentRole, onAd
                 >
                   Batal
                 </button>
-                <button
+                <Button
                   type="submit"
-                  className="bg-primary text-white font-extrabold px-4 py-2 rounded-xl text-xs shadow-glow flex items-center gap-1"
+                  loading={isPosting}
+                  loadingText="Mempublikasikan..."
+                  className="bg-primary text-white font-extrabold px-4 py-2 rounded-xl text-xs shadow-glow flex items-center gap-1 cursor-pointer"
                 >
                   Publikasikan
-                </button>
+                </Button>
               </div>
             </form>
           )}

@@ -68,7 +68,7 @@ export default function HomePage() {
     }
   }, [classId, isApiClass]);
 
-  if (classId && !activeClass && !isApiClass) {
+  if (classId && !activeClass) {
     return (
       <div className="min-h-[70vh] flex flex-col items-center justify-center text-center px-4 space-y-4 animate-fade-in max-w-md mx-auto py-12">
         <div className="w-16 h-16 rounded-3xl bg-danger/10 text-danger flex items-center justify-center shadow-inner">

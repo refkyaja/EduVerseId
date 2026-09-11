@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { BookOpen, Plus, ChevronRight, Sparkles, CheckCircle2, Clock, AlertCircle, XCircle, FileText, Loader2 } from 'lucide-react';
 import { useAppState } from '../context/AppStateContext';
 import { apiService } from '../services/apiService';
+import Button from '../components/Button';
 
 const statusBadgeMap = {
   'Terverifikasi': { color: 'bg-success/15 text-success border-success/30', Icon: CheckCircle2 },
@@ -18,6 +19,7 @@ const statusBadgeMap = {
 export default function ClassMateriPage({ cls, materials, currentRole, onCreateMaterial }) {
   const { showToast } = useAppState();
   const [isCreating, setIsCreating] = useState(false);
+  const [isCreatingMateri, setIsCreatingMateri] = useState(false);
   const [title, setTitle] = useState('');
   const [summary, setSummary] = useState('');
   const [content, setContent] = useState('');
@@ -48,7 +50,8 @@ export default function ClassMateriPage({ cls, materials, currentRole, onCreateM
 
   const handleCreateSubmit = async (e) => {
     e.preventDefault();
-    if (!title.trim()) return;
+    if (!title.trim() || isCreatingMateri) return;
+    setIsCreatingMateri(true);
 
     const initialStatus = currentRole === 'owner' ? 'Terverifikasi' : 'Menunggu Verifikasi';
 
@@ -61,26 +64,28 @@ export default function ClassMateriPage({ cls, materials, currentRole, onCreateM
         });
         await fetchMaterials();
       }
+
+      if (onCreateMaterial) {
+        onCreateMaterial({
+          title: title.trim(),
+          summary: summary.trim() || 'Ringkasan materi baru',
+          content: content.trim() || '<p>Isi materi pembelajaran baru.</p>',
+          status: initialStatus,
+          createdBy: currentRole === 'owner' ? 'Refky Satria (Owner)' : 'Budi Santoso (Admin)',
+          creatorRole: currentRole,
+        });
+      }
+
+      showToast(`Materi "${title}" berhasil dibuat! Status: ${initialStatus}`);
+      setTitle('');
+      setSummary('');
+      setContent('');
+      setIsCreating(false);
     } catch (err) {
       console.warn("API createMateri fallback:", err);
+    } finally {
+      setIsCreatingMateri(false);
     }
-
-    if (onCreateMaterial) {
-      onCreateMaterial({
-        title: title.trim(),
-        summary: summary.trim() || 'Ringkasan materi baru',
-        content: content.trim() || '<p>Isi materi pembelajaran baru.</p>',
-        status: initialStatus,
-        createdBy: currentRole === 'owner' ? 'Refky Satria (Owner)' : 'Budi Santoso (Admin)',
-        creatorRole: currentRole,
-      });
-    }
-
-    showToast(`Materi "${title}" berhasil dibuat! Status: ${initialStatus}`);
-    setTitle('');
-    setSummary('');
-    setContent('');
-    setIsCreating(false);
   };
 
   const formattedApiMaterials = apiMaterials.map(m => {
@@ -182,12 +187,14 @@ export default function ClassMateriPage({ cls, materials, currentRole, onCreateM
                 >
                   Batal
                 </button>
-                <button
+                <Button
                   type="submit"
-                  className="bg-gradient-to-r from-primary to-primary-glow text-white font-extrabold px-5 py-2 rounded-xl text-xs shadow-glow flex items-center gap-1"
+                  loading={isCreatingMateri}
+                  loadingText="Menyimpan Materi..."
+                  className="bg-gradient-to-r from-primary to-primary-glow text-white font-extrabold px-5 py-2 rounded-xl text-xs shadow-glow flex items-center gap-1 cursor-pointer"
                 >
                   Simpan Materi
-                </button>
+                </Button>
               </div>
             </form>
           )}

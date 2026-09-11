@@ -17,6 +17,7 @@ import MainPage from '../pages/MainPage';
 import ClassAnggotaPage from '../pages/ClassAnggotaPage';
 import AccountSettingsPage from '../pages/AccountSettingsPage';
 import AboutPage from '../pages/AboutPage';
+import ClassMemberGuard from '../components/ClassMemberGuard';
 
 /**
  * Protected Route Wrapper Component
@@ -86,9 +87,11 @@ export default function AppRoutes({
         path="/class/:classId"
         element={
           <ProtectedRoute>
-            <MobileLayout>
-              <HomePage />
-            </MobileLayout>
+            <ClassMemberGuard>
+              <MobileLayout>
+                <HomePage />
+              </MobileLayout>
+            </ClassMemberGuard>
           </ProtectedRoute>
         }
       />
@@ -98,9 +101,11 @@ export default function AppRoutes({
         path="/class/:classId/materi"
         element={
           <ProtectedRoute>
-            <MobileLayout>
-              <MateriPage currentRole={user?.activeRole} />
-            </MobileLayout>
+            <ClassMemberGuard>
+              <MobileLayout>
+                <MateriPage currentRole={user?.activeRole} />
+              </MobileLayout>
+            </ClassMemberGuard>
           </ProtectedRoute>
         }
       />
@@ -110,9 +115,11 @@ export default function AppRoutes({
         path="/class/:classId/kuis"
         element={
           <ProtectedRoute>
-            <MobileLayout>
-              <QuizPickerPage currentRole={user?.activeRole} />
-            </MobileLayout>
+            <ClassMemberGuard>
+              <MobileLayout>
+                <QuizPickerPage currentRole={user?.activeRole} />
+              </MobileLayout>
+            </ClassMemberGuard>
           </ProtectedRoute>
         }
       />
@@ -123,9 +130,11 @@ export default function AppRoutes({
         path="/class/:classId/leaderboard"
         element={
           <ProtectedRoute>
-            <MobileLayout>
-              <LeaderboardPage />
-            </MobileLayout>
+            <ClassMemberGuard>
+              <MobileLayout>
+                <LeaderboardPage />
+              </MobileLayout>
+            </ClassMemberGuard>
           </ProtectedRoute>
         }
       />
@@ -135,9 +144,11 @@ export default function AppRoutes({
         path="/class/:classId/anggota"
         element={
           <ProtectedRoute>
-            <MobileLayout>
-              <ProfilePage initialTab="members_view" />
-            </MobileLayout>
+            <ClassMemberGuard>
+              <MobileLayout>
+                <ProfilePage initialTab="members_view" />
+              </MobileLayout>
+            </ClassMemberGuard>
           </ProtectedRoute>
         }
       />
@@ -170,9 +181,11 @@ export default function AppRoutes({
         path="/class/:classId/profile"
         element={
           <ProtectedRoute>
-            <MobileLayout>
-              <ProfilePage />
-            </MobileLayout>
+            <ClassMemberGuard>
+              <MobileLayout>
+                <ProfilePage />
+              </MobileLayout>
+            </ClassMemberGuard>
           </ProtectedRoute>
         }
       />
@@ -180,9 +193,11 @@ export default function AppRoutes({
         path="/class/:classId/edit-info"
         element={
           <ProtectedRoute>
-            <MobileLayout>
-              <ProfilePage initialTab="settings" />
-            </MobileLayout>
+            <ClassMemberGuard>
+              <MobileLayout>
+                <ProfilePage initialTab="settings" />
+              </MobileLayout>
+            </ClassMemberGuard>
           </ProtectedRoute>
         }
       />
@@ -190,9 +205,11 @@ export default function AppRoutes({
         path="/class/:classId/add-subject"
         element={
           <ProtectedRoute>
-            <MobileLayout>
-              <ProfilePage initialTab="add_subject" />
-            </MobileLayout>
+            <ClassMemberGuard>
+              <MobileLayout>
+                <ProfilePage initialTab="add_subject" />
+              </MobileLayout>
+            </ClassMemberGuard>
           </ProtectedRoute>
         }
       />
@@ -200,9 +217,11 @@ export default function AppRoutes({
         path="/class/:classId/add-material"
         element={
           <ProtectedRoute>
-            <MobileLayout>
-              <ProfilePage initialTab="add_material" />
-            </MobileLayout>
+            <ClassMemberGuard>
+              <MobileLayout>
+                <ProfilePage initialTab="add_material" />
+              </MobileLayout>
+            </ClassMemberGuard>
           </ProtectedRoute>
         }
       />
@@ -210,9 +229,11 @@ export default function AppRoutes({
         path="/class/:classId/add-quiz"
         element={
           <ProtectedRoute>
-            <MobileLayout>
-              <ProfilePage initialTab="add_quiz" />
-            </MobileLayout>
+            <ClassMemberGuard>
+              <MobileLayout>
+                <ProfilePage initialTab="add_quiz" />
+              </MobileLayout>
+            </ClassMemberGuard>
           </ProtectedRoute>
         }
       />
@@ -220,9 +241,11 @@ export default function AppRoutes({
         path="/class/:classId/verification"
         element={
           <ProtectedRoute>
-            <MobileLayout>
-              <ProfilePage initialTab="verification" />
-            </MobileLayout>
+            <ClassMemberGuard>
+              <MobileLayout>
+                <ProfilePage initialTab="verification" />
+              </MobileLayout>
+            </ClassMemberGuard>
           </ProtectedRoute>
         }
       />
@@ -230,9 +253,11 @@ export default function AppRoutes({
         path="/class/:classId/members"
         element={
           <ProtectedRoute>
-            <MobileLayout>
-              <ProfilePage initialTab="members" />
-            </MobileLayout>
+            <ClassMemberGuard>
+              <MobileLayout>
+                <ProfilePage initialTab="members" />
+              </MobileLayout>
+            </ClassMemberGuard>
           </ProtectedRoute>
         }
       />
@@ -240,9 +265,11 @@ export default function AppRoutes({
         path="/class/:classId/audit-log"
         element={
           <ProtectedRoute>
-            <MobileLayout>
-              <ProfilePage initialTab="audit_log" />
-            </MobileLayout>
+            <ClassMemberGuard>
+              <MobileLayout>
+                <ProfilePage initialTab="audit_log" />
+              </MobileLayout>
+            </ClassMemberGuard>
           </ProtectedRoute>
         }
       />

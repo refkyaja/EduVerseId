@@ -3,10 +3,12 @@ import { Swords, Plus, Sparkles, HelpCircle, Loader2 } from 'lucide-react';
 import QuizCard from '../components/QuizCard';
 import { useAppState } from '../context/AppStateContext';
 import { apiService } from '../services/apiService';
+import Button from '../components/Button';
 
 export default function ClassKuisPage({ cls, quizzes, currentRole, onCreateQuiz }) {
   const { showToast } = useAppState();
   const [isCreating, setIsCreating] = useState(false);
+  const [isPublishing, setIsPublishing] = useState(false);
   const [title, setTitle] = useState('');
   const [timeLimit, setTimeLimit] = useState(30);
   const [apiQuizzes, setApiQuizzes] = useState([]);
@@ -36,7 +38,8 @@ export default function ClassKuisPage({ cls, quizzes, currentRole, onCreateQuiz 
 
   const handleCreateSubmit = async (e) => {
     e.preventDefault();
-    if (!title.trim()) return;
+    if (!title.trim() || isPublishing) return;
+    setIsPublishing(true);
 
     const quizData = {
       title: title.trim(),
@@ -68,17 +71,19 @@ export default function ClassKuisPage({ cls, quizzes, currentRole, onCreateQuiz 
         });
         await fetchQuizzes();
       }
+
+      if (onCreateQuiz) {
+        onCreateQuiz(quizData);
+      }
+
+      showToast(`Kuis "${title}" berhasil diterbitkan!`);
+      setTitle('');
+      setIsCreating(false);
     } catch (err) {
       console.warn("API createKuis fallback:", err);
+    } finally {
+      setIsPublishing(false);
     }
-
-    if (onCreateQuiz) {
-      onCreateQuiz(quizData);
-    }
-
-    showToast(`Kuis "${title}" berhasil diterbitkan!`);
-    setTitle('');
-    setIsCreating(false);
   };
 
   const formattedApiQuizzes = apiQuizzes.map(q => ({
@@ -158,12 +163,14 @@ export default function ClassKuisPage({ cls, quizzes, currentRole, onCreateQuiz 
                 >
                   Batal
                 </button>
-                <button
+                <Button
                   type="submit"
-                  className="bg-gradient-to-r from-primary to-primary-glow text-white font-extrabold px-5 py-2 rounded-xl text-xs shadow-glow flex items-center gap-1"
+                  loading={isPublishing}
+                  loadingText="Menerbitkan Kuis..."
+                  className="bg-gradient-to-r from-primary to-primary-glow text-white font-extrabold px-5 py-2 rounded-xl text-xs shadow-glow flex items-center gap-1 cursor-pointer"
                 >
                   Terbitkan Kuis
-                </button>
+                </Button>
               </div>
             </form>
           )}

@@ -20,6 +20,7 @@ use Illuminate\Support\Facades\Route;
 // Public Authentication Routes
 Route::post('/register', [AuthController::class, 'register']);
 Route::post('/login', [AuthController::class, 'login']);
+Route::get('/check-username', [AuthController::class, 'checkUsername']);
 
 // Protected Routes (Requires Laravel Sanctum Token)
 Route::middleware('auth:sanctum')->group(function () {
@@ -43,6 +44,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/classes/{id}/members/{user}/demote', [ClassMemberController::class, 'demote']);
     Route::delete('/classes/{id}/members/{user}', [ClassMemberController::class, 'destroy']);
     Route::post('/classes/{id}/leave', [ClassMemberController::class, 'leave']);
+    Route::post('/classes/{id}/transfer-owner', [ClassMemberController::class, 'transferOwnership']);
 
     // Mapel (Mata Pelajaran) API
     Route::get('/classes/{id}/mapel', [MapelController::class, 'index']);

@@ -26,7 +26,9 @@ export const authService = {
       if (!response.ok || !result.success) {
         const errorMsg = result.message || 'Registrasi gagal';
         const errors = result.errors ? Object.values(result.errors).flat().join(', ') : '';
-        throw new Error(errors ? `${errorMsg}: ${errors}` : errorMsg);
+        const customError = new Error(errors ? `${errorMsg}: ${errors}` : errorMsg);
+        customError.errors = result.errors;
+        throw customError;
       }
 
       if (result.data?.token) {
@@ -40,6 +42,22 @@ export const authService = {
         throw new Error('Gagal terhubung ke server backend Laravel. Pastikan server backend (http://127.0.0.1:8000) sedang berjalan.');
       }
       throw err;
+    }
+  },
+
+  async checkUsername(username) {
+    try {
+      const response = await fetch(`${API_BASE_URL}/check-username?username=${encodeURIComponent(username)}`, {
+        method: 'GET',
+        headers: {
+          'Accept': 'application/json',
+        },
+      });
+
+      const result = await response.json();
+      return result;
+    } catch (err) {
+      return { success: false, available: false, message: 'Gagal terhubung ke server backend.' };
     }
   },
 
@@ -151,8 +169,14 @@ export const authService = {
     } catch (err) {
       console.warn('Logout API error:', err);
     } finally {
+      const storedUser = authService.getStoredUser();
+      if (storedUser && storedUser.id) {
+        localStorage.removeItem(`eduverse_state_${storedUser.id}`);
+        localStorage.removeItem(`eduquest_state_${storedUser.id}`);
+      }
       localStorage.removeItem('eduverse_token');
       localStorage.removeItem('eduverse_user');
+      localStorage.removeItem('eduverse_state');
       localStorage.removeItem('eduquest_state');
       localStorage.removeItem('eduverse_classes');
       localStorage.removeItem('eduverse_user_classes');

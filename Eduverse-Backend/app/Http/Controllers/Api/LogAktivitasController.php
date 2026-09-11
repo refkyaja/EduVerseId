@@ -17,14 +17,36 @@ class LogAktivitasController extends Controller
             return response()->json(['status' => 'error', 'message' => 'Anda tidak memiliki akses ke log aktivitas kelas ini.'], 403);
         }
 
-        $logs = LogAktivitas::where('kelas_id', $classId)
-            ->with('user')
-            ->orderBy('created_at', 'desc')
-            ->get();
+        $query = LogAktivitas::where('kelas_id', $classId)->with('user');
+
+        if ($request->filled('role') && strtolower($request->input('role')) !== 'all') {
+            $query->where('peran_user', strtoupper($request->input('role')));
+        }
+
+        if ($request->filled('start_date')) {
+            $query->whereDate('created_at', '>=', $request->input('start_date'));
+        }
+
+        if ($request->filled('end_date')) {
+            $query->whereDate('created_at', '<=', $request->input('end_date'));
+        }
+
+        $perPage = (int)$request->input('per_page', 10);
+        if ($perPage <= 0 || $perPage > 100) {
+            $perPage = 10;
+        }
+
+        $logs = $query->orderBy('created_at', 'desc')->paginate($perPage);
 
         return response()->json([
             'status' => 'success',
-            'data' => $logs
+            'data' => $logs->items(),
+            'pagination' => [
+                'current_page' => $logs->currentPage(),
+                'last_page' => $logs->lastPage(),
+                'per_page' => $logs->perPage(),
+                'total' => $logs->total(),
+            ],
         ]);
     }
 }

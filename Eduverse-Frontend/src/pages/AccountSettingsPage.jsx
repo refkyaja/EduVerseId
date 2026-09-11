@@ -22,11 +22,14 @@ import {
 } from 'lucide-react';
 import { useAppState } from '../context/AppStateContext';
 import ImageCropperModal from '../components/ImageCropperModal';
+import Button from '../components/Button';
+import ConfirmModal from '../components/ConfirmModal';
 
 export default function AccountSettingsPage() {
   const navigate = useNavigate();
   const fileInputRef = useRef(null);
   const { appState, currentUser, userProfile, updateUserProfile, toggleDarkMode, showToast, logoutUser } = useAppState();
+  const [isLogoutConfirmOpen, setIsLogoutConfirmOpen] = useState(false);
 
   const activeUser = currentUser || userProfile || {
     name: 'Refky Satria',
@@ -55,6 +58,7 @@ export default function AccountSettingsPage() {
   const [activeTab, setActiveTab] = useState('profile'); // 'profile', 'edit', 'security', 'theme'
   const [cropperOpen, setCropperOpen] = useState(false);
   const [tempImageSrc, setTempImageSrc] = useState(null);
+  const [profileLoading, setProfileLoading] = useState(false);
 
   // Password Change Form States
   const [currentPassword, setCurrentPassword] = useState('');
@@ -124,20 +128,27 @@ export default function AccountSettingsPage() {
     showToast('Foto profil berhasil dihapus dan dikembalikan ke inisial nama.');
   };
 
-  // 3. Save Edit Information (Name, Username, Email, Bio)
-  const handleSaveProfile = (e) => {
+  const handleSaveProfile = async (e) => {
     e.preventDefault();
-    if (updateUserProfile) {
-      updateUserProfile({
-        name: name.trim(),
-        username: username.trim().toLowerCase().replace(/\s+/g, ''),
-        email: email.trim(),
-        bio: bio.trim(),
-        avatar: selectedAvatar,
-        profile_photo: selectedAvatar,
-      });
+    if (profileLoading) return;
+    setProfileLoading(true);
+    try {
+      if (updateUserProfile) {
+        await updateUserProfile({
+          name: name.trim(),
+          username: username.trim().toLowerCase().replace(/\s+/g, ''),
+          email: email.trim(),
+          bio: bio.trim(),
+          avatar: selectedAvatar,
+          profile_photo: selectedAvatar,
+        });
+      }
+      showToast('Informasi akun berhasil diperbarui!');
+    } catch (err) {
+      showToast(err.message || 'Gagal memperbarui informasi akun', 'error');
+    } finally {
+      setProfileLoading(false);
     }
-    showToast('Informasi akun berhasil diperbarui!');
   };
 
   // 4. Handle Password Change Submit
@@ -242,7 +253,7 @@ export default function AccountSettingsPage() {
           </button>
 
           <button
-            onClick={handleLogout}
+            onClick={() => setIsLogoutConfirmOpen(true)}
             className="flex-1 md:w-full shrink-0 flex items-center justify-center md:justify-start gap-3 px-4 py-3 md:py-3.5 rounded-2xl font-extrabold text-xs text-danger hover:bg-danger/10 transition-colors cursor-pointer whitespace-nowrap md:mt-2 md:pt-3 md:border-t md:border-border/60"
           >
             <LogOut className="w-4 h-4 shrink-0" />
@@ -254,7 +265,7 @@ export default function AccountSettingsPage() {
         <div className="md:col-span-8 space-y-6">
           {activeTab === 'profile' && (
             <div className="space-y-6">
-              {/* EduQuest Brand Gradient Profile Header Banner */}
+              {/* EduVerse Brand Gradient Profile Header Banner */}
               <div className="relative rounded-3xl p-6 md:p-8 bg-gradient-to-br from-primary via-primary to-primary-glow border border-white/20 shadow-glow overflow-hidden text-primary-foreground flex flex-col sm:flex-row items-center sm:items-start gap-6">
                 {/* Circular Profile Avatar with Camera & Delete Overlays */}
                 <div className="relative group shrink-0">
@@ -407,12 +418,15 @@ export default function AccountSettingsPage() {
                   />
                 </div>
 
-                <button
+                <Button
                   type="submit"
+                  loading={profileLoading}
+                  loadingText="Menyimpan..."
+                  icon={Check}
                   className="w-full sm:w-auto bg-gradient-to-r from-primary to-primary-glow text-white font-extrabold py-3.5 px-8 rounded-2xl text-xs shadow-glow active:scale-95 transition-all flex items-center justify-center gap-2 cursor-pointer"
                 >
-                  <Check className="w-4 h-4" /> Simpan Perubahan Profil
-                </button>
+                  Simpan Perubahan Profil
+                </Button>
               </form>
             </div>
           )}
@@ -516,13 +530,15 @@ export default function AccountSettingsPage() {
                   </div>
                 </div>
 
-                <button
+                <Button
                   type="submit"
-                  disabled={passwordLoading}
+                  loading={passwordLoading}
+                  loadingText="Menyimpan..."
+                  icon={Lock}
                   className="w-full sm:w-auto bg-gradient-to-r from-primary to-primary-glow text-white font-extrabold py-3.5 px-8 rounded-2xl text-xs shadow-glow active:scale-95 transition-all flex items-center justify-center gap-2 cursor-pointer"
                 >
-                  <Lock className="w-4 h-4" /> {passwordLoading ? 'Memproses Ubah Kata Sandi...' : 'Perbarui Kata Sandi'}
-                </button>
+                  Perbarui Kata Sandi
+                </Button>
               </form>
             </div>
           )}
@@ -582,7 +598,7 @@ export default function AccountSettingsPage() {
                   </div>
                   <div>
                     <h4 className="font-extrabold text-sm">Mode Gelap (Dark)</h4>
-                    <p className="text-xs text-muted-foreground mt-0.5">Tampilan gelap EduQuest yang elegan</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">Tampilan gelap EduVerse yang elegan</p>
                   </div>
                 </div>
               </div>
@@ -602,6 +618,19 @@ export default function AccountSettingsPage() {
           onCropComplete={handleCropComplete}
         />
       )}
+
+      <ConfirmModal
+        isOpen={isLogoutConfirmOpen}
+        onClose={() => setIsLogoutConfirmOpen(false)}
+        onConfirm={handleLogout}
+        title="Konfirmasi Keluar"
+        description="Apakah Anda yakin ingin keluar dari akun ini?"
+        confirmText="Ya, Keluar"
+        loadingText="Keluar..."
+        cancelText="Batal"
+        variant="danger"
+        icon={LogOut}
+      />
     </section>
   );
 }

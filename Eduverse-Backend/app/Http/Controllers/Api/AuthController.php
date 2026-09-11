@@ -37,6 +37,43 @@ class AuthController extends Controller
         ], 201);
     }
 
+    public function checkUsername(Request $request)
+    {
+        $username = trim((string) $request->query('username', ''));
+
+        if ($username === '') {
+            return response()->json([
+                'success' => false,
+                'available' => false,
+                'message' => 'Username tidak boleh kosong.',
+            ], 422);
+        }
+
+        if (!preg_match('/^[A-Za-z0-9_-]+$/', $username)) {
+            return response()->json([
+                'success' => false,
+                'available' => false,
+                'message' => 'Username hanya boleh berisi huruf, angka, tanda hubung, dan garis bawah.',
+            ], 422);
+        }
+
+        $exists = User::where('username', $username)->exists();
+
+        if ($exists) {
+            return response()->json([
+                'success' => true,
+                'available' => false,
+                'message' => 'Username sudah digunakan, coba yang lain.',
+            ], 200);
+        }
+
+        return response()->json([
+            'success' => true,
+            'available' => true,
+            'message' => 'Username tersedia.',
+        ], 200);
+    }
+
     /**
      * Login user and create token.
      */

@@ -10,8 +10,17 @@ use Illuminate\Http\Request;
 
 class MapelController extends Controller
 {
-    public function index($classId)
+    public function index(Request $request, $classId)
     {
+        $user = $request->user();
+        $class = ClassModel::find($classId);
+        if (!$class || !$class->hasUser($user)) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Anda tidak memiliki akses ke mata pelajaran kelas ini.'
+            ], 403);
+        }
+
         $mapel = Mapel::where('kelas_id', $classId)->withCount('materi')->get();
 
         return response()->json([

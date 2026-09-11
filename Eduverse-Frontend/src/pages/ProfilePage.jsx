@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useParams, useNavigate, useLocation, useSearchParams } from 'react-router-dom';
-import { Settings, ChevronRight, ChevronDown, ShieldCheck, Users, Swords, Flame, Trophy, Award, Zap, CheckCircle2, TrendingUp, AlertCircle, BookOpen, Target, Calendar, Plus, FolderPlus, FileText, Sparkles, RefreshCcw, History, Clock, UserCheck, KeyRound, Save, Trash2, Pencil, X, XCircle, ShieldAlert, BarChart3, Copy, Check, Eye, Loader2, Search } from 'lucide-react';
+import { Settings, ChevronRight, ChevronDown, ShieldCheck, Users, Swords, Flame, Trophy, Award, Zap, CheckCircle2, TrendingUp, AlertCircle, BookOpen, Target, Calendar, Plus, FolderPlus, FileText, Sparkles, RefreshCcw, History, Clock, UserCheck, KeyRound, Save, Trash2, Pencil, X, XCircle, ShieldAlert, BarChart3, Copy, Check, Eye, Loader2, Search, LogOut } from 'lucide-react';
 import { useAppState } from '../context/AppStateContext';
 import { INITIAL_CLASSES } from '../data/mockData';
 import ClassSettingsModal from '../components/ClassSettingsModal';
@@ -8,13 +8,14 @@ import ClassAnggotaPage from './ClassAnggotaPage';
 import ConfirmModal from '../components/ConfirmModal';
 import MaterialVersionDropdown from '../components/MaterialVersionDropdown';
 import { apiService } from '../services/apiService';
+import Button from '../components/Button';
 
 export default function ProfilePage({ initialTab }) {
   const { classId: routeClassId } = useParams();
   const navigate = useNavigate();
   const location = useLocation();
   const [searchParams] = useSearchParams();
-  const { appState, userProfile, getLevelInfo, showToast, currentUser, findClass, updateClassInfo, addMateri, updateMateriInState, addQuiz, isLoadingClasses } = useAppState();
+  const { appState, userProfile, getLevelInfo, showToast, currentUser, findClass, updateClassInfo, addMateri, updateMateriInState, addQuiz, isLoadingClasses, fetchUserClasses } = useAppState();
 
   const getTabFromPath = () => {
     if (initialTab) return initialTab;
@@ -39,7 +40,7 @@ export default function ProfilePage({ initialTab }) {
     if (isApiClass && isLoadingClasses) return null;
     if (currentUser?.activeRole) return String(currentUser.activeRole).toLowerCase();
     if (currentUser?.role && currentUser.role !== 'user') return String(currentUser.role).toLowerCase();
-    if (!isLoadingClasses && isApiClass && !activeClass) return 'member';
+    if (!isLoadingClasses && isApiClass && !activeClass) return null;
     if (isDemoClass) return 'owner';
     return null;
   };
@@ -177,20 +178,26 @@ export default function ProfilePage({ initialTab }) {
     title: '',
     description: '',
     confirmText: 'Hapus',
+    loadingText: undefined,
     variant: 'danger',
     onConfirm: () => {}
   });
 
-  const triggerConfirmModal = ({ title, description, confirmText = 'Hapus', variant = 'danger', onConfirm }) => {
+  const triggerConfirmModal = ({ title, description, confirmText = 'Hapus', loadingText, variant = 'danger', onConfirm }) => {
     setConfirmModalState({
       isOpen: true,
       title,
       description,
       confirmText,
+      loadingText,
       variant,
       onConfirm
     });
   };
+
+  const [isSavingClassInfo, setIsSavingClassInfo] = useState(false);
+  const [isSavingMaterial, setIsSavingMaterial] = useState(false);
+  const [verifyingAction, setVerifyingAction] = useState(null);
 
   const [newMaterialTitle, setNewMaterialTitle] = useState('');
   const [newMaterialSubject, setNewMaterialSubject] = useState('');
@@ -392,6 +399,31 @@ Pisahkan tiap soal dengan baris kosong. Jangan pakai markdown (bold/italic), jan
     }
   };
 
+  const handleTransferOwnership = async (targetMember) => {
+    const targetUserId = targetMember.user_id || targetMember.userId || targetMember.id;
+    try {
+      if (isApiClass && routeClassId) {
+        await apiService.transferOwnership(routeClassId, targetUserId);
+      }
+      if (fetchUserClasses) {
+        await fetchUserClasses();
+      }
+      setDbMemberList(prev => prev.map(mem => {
+        if (String(mem.id) === String(targetUserId)) {
+          return { ...mem, role: 'owner' };
+        }
+        if (mem.role === 'owner') {
+          return { ...mem, role: 'admin' };
+        }
+        return mem;
+      }));
+      showToast(`Kepemilikan kelas berhasil ditransfer ke ${targetMember.name}. Anda kini berstatus Admin.`);
+      window.location.reload();
+    } catch (err) {
+      showToast(err.message || 'Gagal mentransfer kepemilikan kelas', 'error');
+    }
+  };
+
   const [rawSoalText, setRawSoalText] = useState('');
   const [parsedSoalList, setParsedSoalList] = useState([]);
   const [isParsingSoal, setIsParsingSoal] = useState(false);
@@ -486,6 +518,9 @@ Pisahkan tiap soal dengan baris kosong. Jangan pakai markdown (bold/italic), jan
   }, [isApiClass, routeClassId]);
 
   const handleApprovePending = async (materiId, versiId, title) => {
+    const actionKey = `${versiId || materiId}-approve`;
+    if (verifyingAction) return;
+    setVerifyingAction(actionKey);
     try {
       if (isApiClass && routeClassId && versiId) {
         await apiService.verifyMateriVersi(routeClassId, versiId, { status: 'terverifikasi' });
@@ -513,10 +548,15 @@ Pisahkan tiap soal dengan baris kosong. Jangan pakai markdown (bold/italic), jan
       showToast(`Materi "${title}" berhasil diverifikasi & diterbitkan!`);
     } catch (err) {
       showToast(err.message || "Gagal memverifikasi materi");
+    } finally {
+      setVerifyingAction(null);
     }
   };
 
   const handleRejectPending = async (materiId, versiId, title) => {
+    const actionKey = `${versiId || materiId}-reject`;
+    if (verifyingAction) return;
+    setVerifyingAction(actionKey);
     try {
       if (isApiClass && routeClassId && versiId) {
         await apiService.verifyMateriVersi(routeClassId, versiId, { status: 'ditolak' });
@@ -526,6 +566,8 @@ Pisahkan tiap soal dengan baris kosong. Jangan pakai markdown (bold/italic), jan
       showToast(`Materi "${title}" ditolak.`);
     } catch (err) {
       showToast(err.message || "Gagal menolak materi");
+    } finally {
+      setVerifyingAction(null);
     }
   };
 
@@ -598,6 +640,8 @@ Pisahkan tiap soal dengan baris kosong. Jangan pakai markdown (bold/italic), jan
 
   const handleSaveClassInfo = async (e) => {
     e.preventDefault();
+    if (isSavingClassInfo) return;
+    setIsSavingClassInfo(true);
     try {
       let updatedRes;
       if (isApiClass && routeClassId) {
@@ -628,6 +672,8 @@ Pisahkan tiap soal dengan baris kosong. Jangan pakai markdown (bold/italic), jan
         updateClassInfo(routeClassId || activeClass?.id, { name: className, description: classDesc, code: classCode });
       }
       showToast(err.message || "Gagal memperbarui kelas", 'error');
+    } finally {
+      setIsSavingClassInfo(false);
     }
   };
 
@@ -787,6 +833,7 @@ Pisahkan tiap soal dengan baris kosong. Jangan pakai markdown (bold/italic), jan
       title: 'Hapus Mata Pelajaran',
       description: `Apakah Anda yakin ingin menghapus Mata Pelajaran "${mapelNama}"? Data yang sudah dihapus tidak dapat dikembalikan.`,
       confirmText: 'Ya, Hapus Mapel',
+      loadingText: 'Menghapus Mapel...',
       variant: 'danger',
       onConfirm: async () => {
         try {
@@ -812,6 +859,7 @@ Pisahkan tiap soal dengan baris kosong. Jangan pakai markdown (bold/italic), jan
       title: 'Hapus Materi Pembelajaran',
       description: `Apakah Anda yakin ingin menghapus Materi "${materiTitle}"? Data yang sudah dihapus tidak dapat dikembalikan.`,
       confirmText: 'Ya, Hapus Materi',
+      loadingText: 'Menghapus Materi...',
       variant: 'danger',
       onConfirm: async () => {
         try {
@@ -840,6 +888,7 @@ Pisahkan tiap soal dengan baris kosong. Jangan pakai markdown (bold/italic), jan
       title: `Hapus Versi v${verNum}`,
       description: `Apakah Anda yakin ingin menghapus Versi v${verNum} dari materi "${materiObj.title || materiObj.judul}"?`,
       confirmText: 'Ya, Hapus Versi',
+      loadingText: 'Menghapus Versi...',
       variant: 'danger',
       onConfirm: async () => {
         try {
@@ -872,7 +921,8 @@ Pisahkan tiap soal dengan baris kosong. Jangan pakai markdown (bold/italic), jan
 
   const handleCreateMaterial = async (e) => {
     e.preventDefault();
-    if (!newMaterialTitle.trim() || !newMaterialContent.trim()) return;
+    if (!newMaterialTitle.trim() || !newMaterialContent.trim() || isSavingMaterial) return;
+    setIsSavingMaterial(true);
 
     const isOwner = activeRole === 'owner';
     const selectedMapelObj = dbMapelList.find(m => m.kode === newMaterialSubject || String(m.id) === String(newMaterialSubject)) || dbMapelList[0];
@@ -936,6 +986,8 @@ Pisahkan tiap soal dengan baris kosong. Jangan pakai markdown (bold/italic), jan
       setIsCreateMaterialOpen(false);
     } catch (err) {
       showToast(err.message || "Gagal membuat materi");
+    } finally {
+      setIsSavingMaterial(false);
     }
   };
 
@@ -949,7 +1001,8 @@ Pisahkan tiap soal dengan baris kosong. Jangan pakai markdown (bold/italic), jan
 
   const handleUpdateExistingMaterial = async (e) => {
     e.preventDefault();
-    if (!editingMaterial || !editMaterialTitle.trim() || !editMaterialContent.trim()) return;
+    if (!editingMaterial || !editMaterialTitle.trim() || !editMaterialContent.trim() || isSavingMaterial) return;
+    setIsSavingMaterial(true);
 
     const isOwner = activeRole === 'owner';
     const originalContent = (editingMaterial.contentV1 || editingMaterial.content || editingMaterial.isi || '').trim();
@@ -1116,6 +1169,8 @@ Pisahkan tiap soal dengan baris kosong. Jangan pakai markdown (bold/italic), jan
       setIsCreateMaterialOpen(false);
     } catch (err) {
       showToast(err.message || "Gagal memperbarui materi");
+    } finally {
+      setIsSavingMaterial(false);
     }
   };
 
@@ -1531,6 +1586,7 @@ Pisahkan tiap soal dengan baris kosong. Jangan pakai markdown (bold/italic), jan
       title: 'Hapus Quiz',
       description: `Apakah Anda yakin ingin menghapus Quiz "${quizTitle}"? Data yang sudah dihapus tidak dapat dikembalikan.`,
       confirmText: 'Ya, Hapus Quiz',
+      loadingText: 'Menghapus Quiz...',
       variant: 'danger',
       onConfirm: async () => {
         try {
@@ -1720,6 +1776,39 @@ Pisahkan tiap soal dengan baris kosong. Jangan pakai markdown (bold/italic), jan
   const isOwner = activeRole === 'owner';
   const isAdmin = activeRole === 'admin';
   const canManage = isOwner || isAdmin;
+
+  const handleLeaveClassClick = () => {
+    if (isOwner) {
+      showToast("Kamu adalah pemilik kelas ini. Transfer kepemilikan ke anggota lain atau hapus kelas ini dulu sebelum bisa keluar.", "error");
+      return;
+    }
+
+    const currentClassName = activeClass?.name || className || 'kelas ini';
+    triggerConfirmModal({
+      title: "Keluar dari Kelas?",
+      description: `Yakin ingin keluar dari kelas ${currentClassName}? Kamu perlu kode kelas untuk bergabung kembali.`,
+      confirmText: "Keluar Kelas",
+      loadingText: "Keluar Kelas...",
+      variant: "danger",
+      onConfirm: async () => {
+        const targetClassId = routeClassId || activeClass?.id;
+        if (!targetClassId) return;
+
+        try {
+          if (isApiClass) {
+            await apiService.leaveClass(targetClassId);
+          }
+          if (fetchUserClasses) {
+            await fetchUserClasses();
+          }
+          showToast("Berhasil keluar dari kelas.");
+          navigate('/');
+        } catch (err) {
+          showToast(err.message || "Gagal keluar dari kelas", "error");
+        }
+      }
+    });
+  };
 
   // Security Protection 0: Role Loading State (Avoid flashing access denied screens)
   if (isRoleLoading && isApiClass) {
@@ -1932,6 +2021,32 @@ Pisahkan tiap soal dengan baris kosong. Jangan pakai markdown (bold/italic), jan
               <Users className="w-4 h-4 shrink-0" />
               <span className="flex-1">Anggota Kelas</span>
             </button>
+
+            {isOwner ? (
+              <div className="pt-1 space-y-1">
+                <button
+                  type="button"
+                  disabled
+                  title="Kamu adalah pemilik kelas ini. Transfer kepemilikan ke anggota lain atau hapus kelas ini dulu sebelum bisa keluar."
+                  className="w-full p-3 rounded-2xl font-extrabold text-xs flex items-center gap-3 bg-muted/40 text-muted-foreground/50 border border-border/40 cursor-not-allowed text-left select-none"
+                >
+                  <LogOut className="w-4 h-4 shrink-0" />
+                  <span className="flex-1">Keluar Kelas</span>
+                </button>
+                <p className="text-[10px] text-muted-foreground/75 px-2.5 leading-relaxed">
+                  Kamu adalah pemilik kelas ini. Transfer kepemilikan ke anggota lain atau hapus kelas ini dulu sebelum bisa keluar.
+                </p>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={handleLeaveClassClick}
+                className="w-full p-3 rounded-2xl font-extrabold text-xs flex items-center gap-3 bg-danger/10 hover:bg-danger/20 text-danger border border-danger/20 transition-all cursor-pointer text-left"
+              >
+                <LogOut className="w-4 h-4 shrink-0" />
+                <span className="flex-1">Keluar Kelas</span>
+              </button>
+            )}
 
             {/* Owner & Admin Management Menu List */}
             {isRoleLoading ? (
@@ -2287,12 +2402,15 @@ Pisahkan tiap soal dengan baris kosong. Jangan pakai markdown (bold/italic), jan
                   />
                 </div>
 
-                <button
+                <Button
                   type="submit"
-                  className="bg-primary text-primary-foreground font-extrabold px-5 py-2.5 rounded-xl text-xs flex items-center gap-1.5 shadow-sm hover:scale-105 transition-all"
+                  loading={isSavingClassInfo}
+                  loadingText="Menyimpan Perubahan..."
+                  icon={Save}
+                  className="bg-primary text-primary-foreground font-extrabold px-5 py-2.5 rounded-xl text-xs flex items-center gap-1.5 shadow-sm hover:scale-105 transition-all cursor-pointer"
                 >
-                  <Save className="w-4 h-4" /> Simpan Perubahan Info Kelas
-                </button>
+                  Simpan Perubahan Info Kelas
+                </Button>
               </form>
 
               {/* Kode Masuk Box */}
@@ -2399,20 +2517,14 @@ Pisahkan tiap soal dengan baris kosong. Jangan pakai markdown (bold/italic), jan
                     >
                       Batal
                     </button>
-                    <button
+                    <Button
                       type="submit"
-                      disabled={isSavingSubject}
-                      className="bg-primary text-primary-foreground font-extrabold px-6 py-2 rounded-xl text-xs shadow-glow flex items-center gap-1.5 hover:scale-105 transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
+                      loading={isSavingSubject}
+                      loadingText="Menyimpan Mapel..."
+                      className="bg-primary text-primary-foreground font-extrabold px-6 py-2 rounded-xl text-xs shadow-glow flex items-center gap-1.5 hover:scale-105 transition-all cursor-pointer"
                     >
-                      {isSavingSubject ? (
-                        <>
-                          <Loader2 className="w-4 h-4 animate-spin" />
-                          <span>Menyimpan...</span>
-                        </>
-                      ) : (
-                        <span>Simpan Mapel Baru</span>
-                      )}
-                    </button>
+                      Simpan Mapel Baru
+                    </Button>
                   </div>
                 </form>
               )}
@@ -2462,20 +2574,14 @@ Pisahkan tiap soal dengan baris kosong. Jangan pakai markdown (bold/italic), jan
                     >
                       Batal
                     </button>
-                    <button
+                    <Button
                       type="submit"
-                      disabled={isUpdatingSubject}
-                      className="bg-primary text-primary-foreground font-extrabold px-6 py-2 rounded-xl text-xs shadow-glow flex items-center gap-1.5 hover:scale-105 transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
+                      loading={isUpdatingSubject}
+                      loadingText="Menyimpan Mapel..."
+                      className="bg-primary text-primary-foreground font-extrabold px-6 py-2 rounded-xl text-xs shadow-glow flex items-center gap-1.5 hover:scale-105 transition-all cursor-pointer"
                     >
-                      {isUpdatingSubject ? (
-                        <>
-                          <Loader2 className="w-4 h-4 animate-spin" />
-                          <span>Memperbarui...</span>
-                        </>
-                      ) : (
-                        <span>Simpan Perubahan Mapel</span>
-                      )}
-                    </button>
+                      Simpan Perubahan Mapel
+                    </Button>
                   </div>
                 </form>
               )}
@@ -2708,8 +2814,10 @@ Pisahkan tiap soal dengan baris kosong. Jangan pakai markdown (bold/italic), jan
                       >
                         Batal
                       </button>
-                      <button
+                      <Button
                         type="submit"
+                        loading={isSavingMaterial}
+                        loadingText="Menyimpan Materi..."
                         className="bg-primary text-primary-foreground font-extrabold px-6 py-2.5 rounded-xl text-xs shadow-glow flex items-center gap-1.5 hover:scale-105 transition-all cursor-pointer"
                       >
                         {editingMaterial
@@ -2717,7 +2825,7 @@ Pisahkan tiap soal dengan baris kosong. Jangan pakai markdown (bold/italic), jan
                             ? (isOwner ? `Simpan & Terbitkan v${nextVer}` : `Ajukan Pembaruan v${nextVer}`)
                             : 'Simpan Perubahan')
                           : (isOwner ? 'Publikasikan (Terverifikasi)' : 'Ajukan (Menunggu Verifikasi)')}
-                      </button>
+                      </Button>
                     </div>
                   </form>
                 );
@@ -3062,19 +3170,19 @@ Pisahkan tiap soal dengan baris kosong. Jangan pakai markdown (bold/italic), jan
                             </div>
 
                             <div className="flex items-center gap-2 flex-wrap">
-                              <button
+                              <Button
                                 type="button"
                                 onClick={() => handleParseSoal(true)}
-                                disabled={isParsingSoal || !rawSoalText.trim()}
-                                className="bg-primary text-primary-foreground font-extrabold px-5 py-2.5 rounded-xl text-xs flex items-center gap-2 hover:scale-105 transition-all disabled:opacity-50 cursor-pointer shadow-sm"
+                                disabled={!rawSoalText.trim()}
+                                loading={isParsingSoal}
+                                loadingText="Memproses Teks..."
+                                icon={Plus}
+                                className="bg-primary text-primary-foreground font-extrabold px-5 py-2.5 rounded-xl text-xs flex items-center gap-2 hover:scale-105 transition-all cursor-pointer shadow-sm"
                               >
-                                <Plus className="w-4 h-4" />
-                                {isParsingSoal
-                                  ? 'Memproses Parsing...'
-                                  : (parsedSoalList.length > 0
-                                      ? `+ Parse & Tambah ke Daftar (Soal #${parsedSoalList.length + 1} dst.)`
-                                      : 'Parse Teks Soal')}
-                              </button>
+                                {parsedSoalList.length > 0
+                                  ? `+ Parse & Tambah ke Daftar (Soal #${parsedSoalList.length + 1} dst.)`
+                                  : 'Parse Teks Soal'}
+                              </Button>
 
                               {parsedSoalList.length > 0 && (
                                 <button
@@ -3684,13 +3792,14 @@ Pisahkan tiap soal dengan baris kosong. Jangan pakai markdown (bold/italic), jan
                       >
                         Batal
                       </button>
-                      <button
+                      <Button
                         type="submit"
-                        disabled={isSavingQuiz || isUpdatingQuiz}
-                        className="bg-primary text-primary-foreground font-extrabold px-6 py-2.5 rounded-xl text-xs shadow-glow flex items-center gap-1.5 hover:scale-105 transition-all cursor-pointer disabled:opacity-50"
+                        loading={isSavingQuiz || isUpdatingQuiz}
+                        loadingText="Menerbitkan Kuis..."
+                        className="bg-primary text-primary-foreground font-extrabold px-6 py-2.5 rounded-xl text-xs shadow-glow flex items-center gap-1.5 hover:scale-105 transition-all cursor-pointer"
                       >
                         {editingQuiz ? 'Simpan Perubahan Quiz' : 'Simpan Soal & Terbitkan Quiz'}
-                      </button>
+                      </Button>
                     </div>
                   </form>
                 </div>
@@ -3875,24 +3984,29 @@ Pisahkan tiap soal dengan baris kosong. Jangan pakai markdown (bold/italic), jan
 
                     {/* Actions inside Preview */}
                     <div className="flex justify-end gap-3 pt-3 border-t border-border">
-                      <button
-                        onClick={() => {
-                          handleRejectPending(verifyingMaterial.id, verifyingMaterial.versiId, verifyingMaterial.title);
+                      <Button
+                        onClick={async () => {
+                          await handleRejectPending(verifyingMaterial.id, verifyingMaterial.versiId, verifyingMaterial.title);
                           setVerifyingMaterial(null);
                         }}
+                        loading={verifyingAction === `${verifyingMaterial.versiId || verifyingMaterial.id}-reject`}
+                        loadingText="Menolak..."
                         className="bg-muted hover:bg-danger/20 hover:text-danger text-muted-foreground font-bold px-4 py-2 rounded-xl text-xs transition-colors cursor-pointer"
                       >
                         Tolak Pengajuan
-                      </button>
-                      <button
-                        onClick={() => {
-                          handleApprovePending(verifyingMaterial.id, verifyingMaterial.versiId, verifyingMaterial.title);
+                      </Button>
+                      <Button
+                        onClick={async () => {
+                          await handleApprovePending(verifyingMaterial.id, verifyingMaterial.versiId, verifyingMaterial.title);
                           setVerifyingMaterial(null);
                         }}
+                        loading={verifyingAction === `${verifyingMaterial.versiId || verifyingMaterial.id}-approve`}
+                        loadingText="Menyetujui..."
+                        icon={CheckCircle2}
                         className="bg-success text-white font-extrabold px-5 py-2 rounded-xl text-xs flex items-center gap-1 shadow-sm hover:scale-105 transition-all cursor-pointer"
                       >
-                        <CheckCircle2 className="w-4 h-4" /> Verifikasi &amp; Terbitkan (Setujui)
-                      </button>
+                        Verifikasi &amp; Terbitkan (Setujui)
+                      </Button>
                     </div>
                   </div>
                 );
@@ -3918,18 +4032,23 @@ Pisahkan tiap soal dengan baris kosong. Jangan pakai markdown (bold/italic), jan
                         >
                           <Eye className="w-3.5 h-3.5" /> {Boolean(item.prevVersion?.content) ? 'Pratinjau & Bandingkan Versi' : 'Pratinjau Materi'}
                         </button>
-                        <button
+                        <Button
                           onClick={() => handleRejectPending(item.id, item.versiId, item.title)}
+                          loading={verifyingAction === `${item.versiId || item.id}-reject`}
+                          loadingText="Menolak..."
                           className="bg-muted hover:bg-danger/20 hover:text-danger text-muted-foreground font-bold px-3.5 py-2 rounded-xl text-xs transition-colors cursor-pointer"
                         >
                           Tolak
-                        </button>
-                        <button
+                        </Button>
+                        <Button
                           onClick={() => handleApprovePending(item.id, item.versiId, item.title)}
+                          loading={verifyingAction === `${item.versiId || item.id}-approve`}
+                          loadingText="Menyetujui..."
+                          icon={CheckCircle2}
                           className="bg-success text-white font-extrabold px-4 py-2 rounded-xl text-xs flex items-center gap-1 shadow-sm hover:scale-105 transition-all cursor-pointer"
                         >
-                          <CheckCircle2 className="w-4 h-4" /> Verifikasi &amp; Terbitkan
-                        </button>
+                          Verifikasi &amp; Terbitkan
+                        </Button>
                       </div>
                     </div>
                   ))}
@@ -4006,6 +4125,7 @@ Pisahkan tiap soal dengan baris kosong. Jangan pakai markdown (bold/italic), jan
                 isLoading={isLoadingMembers}
                 onToggleAdmin={handleToggleAdminMember}
                 onKickMember={handleKickMemberItem}
+                onTransferOwner={handleTransferOwnership}
               />
             </div>
           )}
@@ -4028,6 +4148,7 @@ Pisahkan tiap soal dengan baris kosong. Jangan pakai markdown (bold/italic), jan
         title="Buat Ulang Kode Kelas?"
         description="Apakah Anda yakin ingin membuat ulang kode kelas? Kode lama tidak akan berlaku lagi untuk siswa yang ingin bergabung."
         confirmText="Ya, Buat Kode Baru"
+        loadingText="Membuat Kode Baru..."
         cancelText="Batal"
         variant="primary"
       />
@@ -4039,6 +4160,7 @@ Pisahkan tiap soal dengan baris kosong. Jangan pakai markdown (bold/italic), jan
         title={confirmModalState.title}
         description={confirmModalState.description}
         confirmText={confirmModalState.confirmText}
+        loadingText={confirmModalState.loadingText}
         cancelText="Batal"
         variant={confirmModalState.variant}
       />

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { X, Plus, Sparkles, Globe, Lock } from 'lucide-react';
 import { useAppState } from '../context/AppStateContext';
+import Button from './Button';
 
 export default function CreateClassModal({ isOpen, onClose, onCreateClass }) {
   const { showToast, currentUser, fetchUserClasses } = useAppState();
@@ -110,12 +111,14 @@ export default function CreateClassModal({ isOpen, onClose, onCreateClass }) {
           </div>
 
           <div className="pt-2">
-            <button
+            <Button
               type="submit"
+              loading={loading}
+              loadingText="Membuat Kelas..."
               className="w-full bg-gradient-to-r from-primary to-primary-glow text-primary-foreground font-extrabold py-3.5 rounded-xl text-sm shadow-glow active:scale-95 transition-all flex items-center justify-center gap-2 cursor-pointer"
             >
               Buat Kelas Sekarang
-            </button>
+            </Button>
           </div>
         </form>
       </div>

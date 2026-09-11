@@ -12,10 +12,6 @@ class ClassPolicy
      */
     public function view(User $user, ClassModel $class): bool
     {
-        if ($class->visibility === 'public') {
-            return true;
-        }
-
         return $class->hasUser($user);
     }
 

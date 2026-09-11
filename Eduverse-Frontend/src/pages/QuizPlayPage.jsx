@@ -10,6 +10,7 @@ import {
 import { ALL_EXAMS_QUESTIONS, SUBJECTS_DATA } from '../data/quizData';
 import { useAppState } from '../context/AppStateContext';
 import { apiService } from '../services/apiService';
+import Button from '../components/Button';
 
 const POWERUPS_DEFINITIONS = [
   { id: 'hint', name: 'Hint', Icon: Lightbulb, color: 'border-warning/40 bg-warning/10 text-warning hover:bg-warning/20', defaultCharges: 3 },
@@ -96,6 +97,7 @@ export default function QuizPlayPage() {
 
   // Quiz phase: 'start' | 'rolling' | 'playing' | 'finished'
   const [quizPhase, setQuizPhase] = useState('start');
+  const [isStartingQuiz, setIsStartingQuiz] = useState(false);
   const [unlockedPowerups, setUnlockedPowerups] = useState([]);
   const [rollItems, setRollItems] = useState(['hint', 'fifty', 'shield']);
   const [powerUpCharges, setPowerUpCharges] = useState({});
@@ -195,9 +197,10 @@ export default function QuizPlayPage() {
     );
   }
 
-  // ─── START RAFFLE & PREPARE QUESTIONS ─────────────────────────────
   const startPowerupRaffle = () => {
-    // 1. Shuffle Soal & Opsi (Once at start of session if enabled)
+    if (isStartingQuiz) return;
+    setIsStartingQuiz(true);
+
     let prepared = rawQuestions.map((q, qIdx) => {
       const opts = (q.options || []).map((text, idx) => ({
         id: (q.rawOpsiIds && q.rawOpsiIds[idx]) !== undefined ? q.rawOpsiIds[idx] : idx,
@@ -225,7 +228,6 @@ export default function QuizPlayPage() {
     }
     setActiveQuestions(prepared);
 
-    // 2. Raffle 3 Power-Ups
     setQuizPhase('rolling');
     setUnlockedPowerups([]);
 
@@ -254,6 +256,7 @@ export default function QuizPlayPage() {
 
       setTimeout(() => {
         setQuizPhase('playing');
+        setIsStartingQuiz(false);
       }, 1400);
     }, 2200);
   };
@@ -458,7 +461,7 @@ export default function QuizPlayPage() {
 
         <main className="flex-1 px-6 flex flex-col justify-center text-center animate-fade-in my-auto">
           <div className="w-40 h-40 mx-auto grid place-items-center">
-            <img src="/assets/companion.png" alt="EduQuest" className="w-full h-full object-contain" />
+            <img src="/assets/companion.png" alt="EduVerse" className="w-full h-full object-contain" />
           </div>
 
           <p className="text-[11px] font-extrabold uppercase tracking-widest text-primary mt-6">
@@ -484,12 +487,14 @@ export default function QuizPlayPage() {
             </div>
           </div>
 
-          <button
+          <Button
             onClick={startPowerupRaffle}
+            loading={isStartingQuiz}
+            loadingText="Memulai Kuis..."
             className="mt-10 w-full max-w-xs mx-auto py-4 rounded-2xl bg-gradient-to-r from-primary to-primary-glow text-primary-foreground font-extrabold shadow-glow active:scale-95 transition-all cursor-pointer"
           >
             Mulai Ujian →
-          </button>
+          </Button>
 
           <button
             onClick={handleGoHome}
@@ -887,10 +892,10 @@ export default function QuizPlayPage() {
       {/* Top Header Card */}
       <div className="text-center space-y-3">
         <div className="w-16 h-16 rounded-full bg-card border border-border p-3 mx-auto shadow-inner grid place-items-center">
-          <img src="/assets/companion.png" alt="EduQuest" className="w-full h-full object-contain" />
+          <img src="/assets/companion.png" alt="EduVerse" className="w-full h-full object-contain" />
         </div>
         <div>
-          <h1 className="text-2xl font-extrabold italic text-foreground">EduQuest</h1>
+          <h1 className="text-2xl font-extrabold italic text-foreground">EduVerse</h1>
           <p className="text-xs font-bold text-muted-foreground mt-0.5">
             Ujian — {meta.chapter || meta.subject || 'Selesai'}
           </p>

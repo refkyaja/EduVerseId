@@ -9,6 +9,14 @@ const getAuthHeaders = () => {
   };
 };
 
+const notifyClassAccessDenied = (classId) => {
+  if (classId && typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('eduverse-class-access-denied', {
+      detail: { classId: String(classId) }
+    }));
+  }
+};
+
 export const apiService = {
   // --- KELAS & PENGATURAN ---
   async getClasses() {
@@ -69,6 +77,11 @@ export const apiService = {
     const res = await fetch(`${API_BASE_URL}/classes/${classId}`, {
       headers: getAuthHeaders(),
     });
+    if (res.status === 403) {
+      notifyClassAccessDenied(classId);
+      return null;
+    }
+    if (!res.ok) return null;
     const result = await res.json();
     const cls = result.data;
     if (!cls) return null;
@@ -122,6 +135,9 @@ export const apiService = {
     const res = await fetch(`${API_BASE_URL}/classes/${classId}/members`, {
       headers: getAuthHeaders(),
     });
+    if (res.status === 403) {
+      notifyClassAccessDenied(classId);
+    }
     const result = await res.json();
     return result.data || [];
   },
@@ -173,11 +189,39 @@ export const apiService = {
     return result;
   },
 
+  async leaveClass(classId) {
+    const res = await fetch(`${API_BASE_URL}/classes/${classId}/leave`, {
+      method: 'POST',
+      headers: getAuthHeaders(),
+    });
+    const result = await res.json();
+    if (!res.ok || result.status !== 'success') {
+      throw new Error(result.message || 'Gagal keluar dari kelas');
+    }
+    return result;
+  },
+
+  async transferOwnership(classId, newOwnerId) {
+    const res = await fetch(`${API_BASE_URL}/classes/${classId}/transfer-owner`, {
+      method: 'POST',
+      headers: getAuthHeaders(),
+      body: JSON.stringify({ new_owner_id: newOwnerId }),
+    });
+    const result = await res.json();
+    if (!res.ok || result.status !== 'success') {
+      throw new Error(result.message || 'Gagal mentransfer kepemilikan kelas');
+    }
+    return result.data;
+  },
+
   // --- MAPEL (MATA PELAJARAN) ---
   async getMapel(classId) {
     const res = await fetch(`${API_BASE_URL}/classes/${classId}/mapel`, {
       headers: getAuthHeaders(),
     });
+    if (res.status === 403) {
+      notifyClassAccessDenied(classId);
+    }
     const result = await res.json();
     return result.data || [];
   },
@@ -225,6 +269,9 @@ export const apiService = {
     const res = await fetch(`${API_BASE_URL}/classes/${classId}/materi`, {
       headers: getAuthHeaders(),
     });
+    if (res.status === 403) {
+      notifyClassAccessDenied(classId);
+    }
     const result = await res.json();
     return result.data || [];
   },
@@ -305,6 +352,9 @@ export const apiService = {
     const res = await fetch(`${API_BASE_URL}/classes/${classId}/kuis`, {
       headers: getAuthHeaders(),
     });
+    if (res.status === 403) {
+      notifyClassAccessDenied(classId);
+    }
     const result = await res.json();
     return result.data || [];
   },

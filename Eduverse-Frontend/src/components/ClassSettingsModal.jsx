@@ -3,12 +3,14 @@ import { createPortal } from 'react-dom';
 import { X, Settings, RefreshCcw, Save, Trash2, ShieldAlert, KeyRound } from 'lucide-react';
 import { useAppState } from '../context/AppStateContext';
 import ConfirmModal from './ConfirmModal';
+import Button from './Button';
 
 export default function ClassSettingsModal({ isOpen, onClose, cls, currentRole, onUpdateClassInfo, onRegenerateCode, onDeleteClass }) {
   const { showToast } = useAppState();
   const [name, setName] = useState(cls?.name || 'XI RPL 1');
   const [description, setDescription] = useState(cls?.description || '');
   const [code, setCode] = useState(cls?.code || 'RPL101');
+  const [isSavingInfo, setIsSavingInfo] = useState(false);
 
   const [isRegenOpen, setIsRegenOpen] = useState(false);
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
@@ -17,21 +19,29 @@ export default function ClassSettingsModal({ isOpen, onClose, cls, currentRole, 
 
   const isOwner = currentRole === 'owner';
 
-  const handleSaveInfo = (e) => {
+  const handleSaveInfo = async (e) => {
     e.preventDefault();
-    onUpdateClassInfo?.(cls.id, { name, description });
-    showToast("Informasi kelas berhasil diperbarui!");
-    onClose();
+    if (isSavingInfo) return;
+    setIsSavingInfo(true);
+    try {
+      if (onUpdateClassInfo) await onUpdateClassInfo(cls.id, { name, description });
+      showToast("Informasi kelas berhasil diperbarui!");
+      onClose();
+    } catch (err) {
+      showToast(err.message || "Gagal memperbarui informasi kelas", 'error');
+    } finally {
+      setIsSavingInfo(false);
+    }
   };
 
-  const executeRegenCode = () => {
-    const newCode = onRegenerateCode?.(cls.id) || Math.random().toString(36).substring(2, 8).toUpperCase();
+  const executeRegenCode = async () => {
+    const newCode = onRegenerateCode ? await onRegenerateCode(cls.id) : Math.random().toString(36).substring(2, 8).toUpperCase();
     setCode(newCode);
     showToast(`Kode kelas baru dibuat: "${newCode}"`);
   };
 
-  const executeDeleteClass = () => {
-    onDeleteClass?.(cls.id);
+  const executeDeleteClass = async () => {
+    if (onDeleteClass) await onDeleteClass(cls.id);
     showToast(`Kelas "${cls.name}" telah dihapus.`);
     onClose();
     window.location.href = '/';
@@ -80,12 +90,15 @@ export default function ClassSettingsModal({ isOpen, onClose, cls, currentRole, 
                 className="w-full bg-background border border-border rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-primary resize-none"
               />
             </div>
-            <button
+            <Button
               type="submit"
-              className="bg-primary text-primary-foreground font-extrabold px-4 py-2 rounded-xl text-xs flex items-center gap-1.5 shadow-sm hover:scale-105 active:scale-95 transition-all"
+              loading={isSavingInfo}
+              loadingText="Menyimpan Perubahan..."
+              icon={Save}
+              className="bg-primary text-primary-foreground font-extrabold px-4 py-2 rounded-xl text-xs flex items-center gap-1.5 shadow-sm hover:scale-105 active:scale-95 transition-all cursor-pointer"
             >
-              <Save className="w-4 h-4" /> Simpan Informasi Kelas
-            </button>
+              Simpan Informasi Kelas
+            </Button>
           </div>
 
           {/* Regenerate Code Box */}
@@ -136,6 +149,7 @@ export default function ClassSettingsModal({ isOpen, onClose, cls, currentRole, 
         title="Buat Ulang Kode Kelas?"
         description="Apakah Anda yakin ingin membuat ulang kode kelas? Kode lama tidak akan berlaku lagi untuk siswa yang ingin bergabung."
         confirmText="Ya, Buat Kode Baru"
+        loadingText="Membuat Kode Baru..."
         cancelText="Batal"
         variant="primary"
       />
@@ -147,6 +161,7 @@ export default function ClassSettingsModal({ isOpen, onClose, cls, currentRole, 
         title="Hapus Kelas Permanen?"
         description={`PERINGATAN: Apakah Anda yakin ingin menghapus kelas "${cls?.name}" secara permanen? Seluruh data kelas akan dihapus.`}
         confirmText="Ya, Hapus Kelas"
+        loadingText="Menghapus Kelas..."
         cancelText="Batal"
         variant="danger"
       />

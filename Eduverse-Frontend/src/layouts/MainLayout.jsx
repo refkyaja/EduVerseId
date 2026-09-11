@@ -3,6 +3,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { Sparkles, Home, BookOpen, Swords, Trophy, User, LogOut, Settings, ShieldCheck } from 'lucide-react';
 import RoleSwitcher from '../components/RoleSwitcher';
 import Toast from '../components/Toast';
+import ConfirmModal from '../components/ConfirmModal';
 import { useAppState } from '../context/AppStateContext';
 
 export default function MainLayout({ children, user, onRoleChange }) {
@@ -10,6 +11,7 @@ export default function MainLayout({ children, user, onRoleChange }) {
   const location = useLocation();
   const { appState, currentUser, logoutUser, toastMessage } = useAppState();
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
+  const [isLogoutConfirmOpen, setIsLogoutConfirmOpen] = useState(false);
   const currentPath = location.pathname;
 
   const navItems = [
@@ -136,7 +138,10 @@ export default function MainLayout({ children, user, onRoleChange }) {
                       </button>
 
                       <button
-                        onClick={handleLogout}
+                        onClick={() => {
+                          setIsProfileMenuOpen(false);
+                          setIsLogoutConfirmOpen(true);
+                        }}
                         className="w-full text-left px-3 py-2.5 rounded-xl text-xs font-bold text-danger hover:bg-danger/10 transition-colors flex items-center gap-2.5 cursor-pointer mt-1 border-t border-border/60 pt-2"
                       >
                         <LogOut className="w-4 h-4 text-danger shrink-0" />
@@ -188,16 +193,30 @@ export default function MainLayout({ children, user, onRoleChange }) {
             <span className="text-[10px]">Profil</span>
           </Link>
 
-          <Link
-            to="/login"
-            className="flex flex-col items-center gap-1 transition-all text-muted-foreground hover:text-danger"
+          <button
+            type="button"
+            onClick={() => setIsLogoutConfirmOpen(true)}
+            className="flex flex-col items-center gap-1 transition-all text-muted-foreground hover:text-danger cursor-pointer"
           >
             <LogOut className="w-5 h-5" strokeWidth={2} />
             <span className="text-[10px]">Keluar</span>
-          </Link>
+          </button>
         </nav>
 
         <Toast message={toastMessage} />
+
+        <ConfirmModal
+          isOpen={isLogoutConfirmOpen}
+          onClose={() => setIsLogoutConfirmOpen(false)}
+          onConfirm={handleLogout}
+          title="Konfirmasi Keluar"
+          description="Apakah Anda yakin ingin keluar dari akun ini?"
+          confirmText="Ya, Keluar"
+          loadingText="Keluar..."
+          cancelText="Batal"
+          variant="danger"
+          icon={LogOut}
+        />
       </div>
     </div>
   );

@@ -3,13 +3,15 @@ import { Link } from 'react-router-dom';
 import { 
   LogIn, Sparkles, Shield, BookOpen, Users, HelpCircle, ChevronRight, 
   CheckCircle2, Award, Zap, ChevronDown, BarChart3, ShieldCheck, Flame, 
-  Trophy, ArrowRight, Layers, Star, MessageSquare, Heart, GraduationCap, Check, Globe
+  Trophy, ArrowRight, Layers, Star, MessageSquare, Heart, GraduationCap, Check, Globe, LogOut
 } from 'lucide-react';
 import { useAppState } from '../context/AppStateContext';
+import ConfirmModal from '../components/ConfirmModal';
 
 export default function AboutPage() {
   const { currentUser, logoutUser } = useAppState();
   const [openFaqIndex, setOpenFaqIndex] = useState(0);
+  const [isLogoutConfirmOpen, setIsLogoutConfirmOpen] = useState(false);
 
   const toggleFaq = (index) => {
     setOpenFaqIndex(prev => prev === index ? null : index);
@@ -136,7 +138,7 @@ export default function AboutPage() {
             {currentUser ? (
               <>
                 <button
-                  onClick={() => logoutUser()}
+                  onClick={() => setIsLogoutConfirmOpen(true)}
                   className="bg-red-500/15 text-red-300 border border-red-500/30 font-extrabold px-3.5 py-2 rounded-xl text-xs hover:bg-red-500/25 transition-all cursor-pointer"
                   title="Logout Akun"
                 >
@@ -554,6 +556,21 @@ export default function AboutPage() {
           </div>
         </div>
       </footer>
+
+      <ConfirmModal
+        isOpen={isLogoutConfirmOpen}
+        onClose={() => setIsLogoutConfirmOpen(false)}
+        onConfirm={async () => {
+          await logoutUser();
+        }}
+        title="Konfirmasi Keluar"
+        description="Apakah Anda yakin ingin keluar dari akun ini?"
+        confirmText="Ya, Keluar"
+        loadingText="Keluar..."
+        cancelText="Batal"
+        variant="danger"
+        icon={LogOut}
+      />
     </div>
   );
 }

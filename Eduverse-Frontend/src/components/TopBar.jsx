@@ -3,11 +3,13 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Settings, LogOut, User, Sun, Moon } from 'lucide-react';
 import { useAppState } from '../context/AppStateContext';
 import { INITIAL_CLASSES } from '../data/mockData';
+import ConfirmModal from './ConfirmModal';
 
 export default function TopBar() {
   const navigate = useNavigate();
   const { currentUser, logoutUser, getClassXp, findClass, appState, toggleDarkMode } = useAppState();
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
+  const [isLogoutConfirmOpen, setIsLogoutConfirmOpen] = useState(false);
   const location = useLocation();
   const currentPath = location.pathname;
 
@@ -57,10 +59,10 @@ export default function TopBar() {
           </Link>
         ) : (
           <Link to="/" className="flex items-center gap-2.5 group">
-            <img src="/assets/companion.png" alt="EduQuest" className="w-9 h-9 md:w-10 md:h-10 object-contain group-hover:scale-105 transition-transform" />
+            <img src="/assets/companion.png" alt="EduVerse" className="w-9 h-9 md:w-10 md:h-10 object-contain group-hover:scale-105 transition-transform" />
             <div>
               <span className="font-extrabold text-xl md:text-2xl tracking-tight bg-gradient-to-r from-primary to-primary-glow bg-clip-text text-transparent">
-                EduQuest
+                EduVerse
               </span>
             </div>
           </Link>
@@ -161,7 +163,10 @@ export default function TopBar() {
                   </button>
 
                   <button
-                    onClick={handleLogout}
+                    onClick={() => {
+                      setIsProfileMenuOpen(false);
+                      setIsLogoutConfirmOpen(true);
+                    }}
                     className="w-full text-left px-3 py-2 rounded-xl text-xs font-bold text-danger hover:bg-danger/10 transition-colors flex items-center gap-2.5 cursor-pointer"
                   >
                     <LogOut className="w-4 h-4 text-danger shrink-0" />
@@ -173,6 +178,19 @@ export default function TopBar() {
           )}
         </div>
       </div>
+
+      <ConfirmModal
+        isOpen={isLogoutConfirmOpen}
+        onClose={() => setIsLogoutConfirmOpen(false)}
+        onConfirm={handleLogout}
+        title="Konfirmasi Keluar"
+        description="Apakah Anda yakin ingin keluar dari akun ini?"
+        confirmText="Ya, Keluar"
+        loadingText="Keluar..."
+        cancelText="Batal"
+        variant="danger"
+        icon={LogOut}
+      />
     </nav>
   );
 }

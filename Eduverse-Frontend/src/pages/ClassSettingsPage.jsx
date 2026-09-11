@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Settings, RefreshCcw, Save, Trash2, AlertTriangle, ShieldAlert } from 'lucide-react';
 import { useAppState } from '../context/AppStateContext';
 import ConfirmModal from '../components/ConfirmModal';
+import Button from '../components/Button';
 
 export default function ClassSettingsPage({ cls, onUpdateClassInfo, onRegenerateCode, onDeleteClass }) {
   const navigate = useNavigate();
@@ -10,23 +11,32 @@ export default function ClassSettingsPage({ cls, onUpdateClassInfo, onRegenerate
 
   const [name, setName] = useState(cls?.name || '');
   const [description, setDescription] = useState(cls?.description || '');
+  const [isSavingInfo, setIsSavingInfo] = useState(false);
 
   const [isRegenOpen, setIsRegenOpen] = useState(false);
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
 
-  const handleSaveInfo = (e) => {
+  const handleSaveInfo = async (e) => {
     e.preventDefault();
-    onUpdateClassInfo({ name, description });
-    showToast("Informasi kelas berhasil diperbarui!");
+    if (isSavingInfo) return;
+    setIsSavingInfo(true);
+    try {
+      if (onUpdateClassInfo) await onUpdateClassInfo({ name, description });
+      showToast("Informasi kelas berhasil diperbarui!");
+    } catch (err) {
+      showToast(err.message || "Gagal memperbarui informasi kelas", 'error');
+    } finally {
+      setIsSavingInfo(false);
+    }
   };
 
-  const executeRegenCode = () => {
-    const newCode = onRegenerateCode();
+  const executeRegenCode = async () => {
+    const newCode = onRegenerateCode ? await onRegenerateCode() : '';
     showToast(`Kode kelas baru dibuat: "${newCode}"`);
   };
 
-  const executeDeleteClass = () => {
-    onDeleteClass(cls?.id);
+  const executeDeleteClass = async () => {
+    if (onDeleteClass) await onDeleteClass(cls?.id);
     showToast(`Kelas "${cls?.name}" telah dihapus.`);
     navigate('/');
   };
@@ -74,12 +84,15 @@ export default function ClassSettingsPage({ cls, onUpdateClassInfo, onRegenerate
 
 
         <div className="pt-2 flex justify-end">
-          <button
+          <Button
             type="submit"
+            loading={isSavingInfo}
+            loadingText="Menyimpan Perubahan..."
+            icon={Save}
             className="bg-primary text-primary-foreground font-extrabold px-5 py-2.5 rounded-xl text-xs shadow-glow flex items-center gap-1.5 cursor-pointer hover:scale-105 active:scale-95 transition-all"
           >
-            <Save className="w-4 h-4" /> Simpan Perubahan
-          </button>
+            Simpan Perubahan
+          </Button>
         </div>
       </form>
 
@@ -127,6 +140,7 @@ export default function ClassSettingsPage({ cls, onUpdateClassInfo, onRegenerate
         title="Buat Ulang Kode Kelas?"
         description="Apakah Anda yakin ingin membuat ulang kode kelas? Kode lama tidak akan berlaku lagi untuk siswa yang ingin bergabung."
         confirmText="Ya, Buat Kode Baru"
+        loadingText="Membuat Kode Baru..."
         cancelText="Batal"
         variant="primary"
       />
@@ -138,6 +152,7 @@ export default function ClassSettingsPage({ cls, onUpdateClassInfo, onRegenerate
         title="Hapus Kelas Permanen?"
         description={`PERINGATAN: Apakah Anda yakin ingin menghapus kelas "${cls?.name}" secara permanen? Seluruh data pengumuman, materi, kuis, dan data keanggotaan akan hilang.`}
         confirmText="Ya, Hapus Kelas"
+        loadingText="Menghapus Kelas..."
         cancelText="Batal"
         variant="danger"
       />

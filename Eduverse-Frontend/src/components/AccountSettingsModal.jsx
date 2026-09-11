@@ -3,12 +3,14 @@ import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { X, User, Settings, Lock, Moon, Sun, LogOut, Shield, Check, Sparkles, Mail } from 'lucide-react';
 import { useAppState } from '../context/AppStateContext';
+import Button from './Button';
 
 export default function AccountSettingsModal({ isOpen, onClose }) {
   const navigate = useNavigate();
   const { showToast } = useAppState();
   const [activeTab, setActiveTab] = useState('profile'); // 'profile', 'edit', 'settings'
   const [isDarkMode, setIsDarkMode] = useState(true);
+  const [savingProfile, setSavingProfile] = useState(false);
 
   // Edit form state
   const [name, setName] = useState('Refky Satria');
@@ -36,10 +38,16 @@ export default function AccountSettingsModal({ isOpen, onClose }) {
 
   if (!isOpen) return null;
 
-  const handleSaveProfile = (e) => {
+  const handleSaveProfile = async (e) => {
     e.preventDefault();
-    showToast('Profil dan informasi akun berhasil diperbarui!');
-    setActiveTab('profile');
+    if (savingProfile) return;
+    setSavingProfile(true);
+    try {
+      showToast('Profil dan informasi akun berhasil diperbarui!');
+      setActiveTab('profile');
+    } finally {
+      setSavingProfile(false);
+    }
   };
 
   const handleLogout = () => {
@@ -229,12 +237,15 @@ export default function AccountSettingsModal({ isOpen, onClose }) {
               </div>
 
               <div className="pt-2">
-                <button
+                <Button
                   type="submit"
+                  loading={savingProfile}
+                  loadingText="Menyimpan..."
+                  icon={Check}
                   className="w-full bg-gradient-to-r from-primary to-primary-glow text-primary-foreground font-extrabold py-3 rounded-xl text-xs shadow-glow active:scale-95 transition-all flex items-center justify-center gap-2 cursor-pointer"
                 >
-                  <Check className="w-4 h-4" /> Simpan Perubahan
-                </button>
+                  Simpan Perubahan
+                </Button>
               </div>
             </form>
           )}

@@ -263,6 +263,7 @@
 .login-page-container .form button.btn-action:disabled {
 	opacity: 0.7;
 	cursor: not-allowed;
+	pointer-events: none;
 	transform: none;
 }
 
@@ -293,6 +294,50 @@
 	background-color: rgba(16, 185, 129, 0.15);
 	color: #6ee7b7;
 	border: 1px solid rgba(16, 185, 129, 0.3);
+}
+
+.login-page-container .input-group input.has-error {
+	border-color: #ef4444;
+	background-color: rgba(239, 68, 68, 0.06);
+}
+
+.login-page-container .input-group input.has-error:focus {
+	border-color: #ef4444;
+	box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.25);
+}
+
+.login-page-container .input-group input.has-success {
+	border-color: #10b981;
+	background-color: rgba(16, 185, 129, 0.06);
+}
+
+.login-page-container .input-group input.has-success:focus {
+	border-color: #10b981;
+	box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.25);
+}
+
+.login-page-container .field-feedback {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	font-size: 0.76rem;
+	margin: -0.25rem 0 0.5rem 0.25rem;
+	text-align: left;
+	line-height: 1.3;
+	font-weight: 500;
+	transition: all 0.2s ease;
+}
+
+.login-page-container .field-feedback.error {
+	color: #f87171;
+}
+
+.login-page-container .field-feedback.tersedia {
+	color: #34d399;
+}
+
+.login-page-container .field-feedback.loading {
+	color: #93c5fd;
 }
 
 .login-page-container .form .tautan-beranda {
