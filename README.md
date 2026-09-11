@@ -145,8 +145,6 @@ EduVerse/
 │   │   └── services/              # authService & Integrasi API Helper
 │   ├── package.json
 │   └── vite.config.js
-│
-├── Dokumentasi_Aplikasi_EduVerse.md # Dokumentasi Lengkap & Buku Panduan Teknis
 └── README.md                       # Ringkasan Proyek & Panduan Memulai
 ```
 
@@ -232,49 +230,6 @@ cd EduVerse_PaAri
    npm run dev
    ```
    > Aplikasi klien dapat diakses melalui peramban di `http://localhost:5173`.
-
----
-
-## 📋 Matriks Hak Akses Peran (*Role Matrix*)
-
-| Hak Akses / Fitur | Owner Kelas | Admin Kelas | Member Kelas |
-| :--- | :---: | :---: | :---: |
-| Mengubah Info & Kode Kelas | ✅ | ❌ | ❌ |
-| Mengeluarkan Anggota (*Kick*) | ✅ | ❌ | ❌ |
-| Promosi / Demosi Admin | ✅ | ❌ | ❌ |
-| Hapus Ruang Kelas | ✅ | ❌ | ❌ |
-| Menyetujui / Menolak Draf Materi | ✅ | ❌ | ❌ |
-| Buat Materi (*Direct Publish*) | ✅ | ❌ | ❌ |
-| Ajukan Draf Materi Baru | ✅ | ✅ | ❌ |
-| Kelola Mapel & Bank Soal | ✅ | ✅ | ❌ |
-| Rancang & Terbitkan Kuis | ✅ | ✅ | ❌ |
-| Membaca Materi Terverifikasi | ✅ | ✅ | ✅ |
-| Mengerjakan Kuis & Power-Up | ✅ | ✅ | ✅ |
-| Melihat Peringkat Leaderboard | ✅ | ✅ | ✅ |
-
----
-
-## 📡 Ringkasan Endpoint API Utama
-
-| Method | Endpoint | Deskripsi | Akses |
-| :--- | :--- | :--- | :--- |
-| `POST` | `/api/register` | Pendaftaran akun baru | Publik |
-| `POST` | `/api/login` | Otentikasi pengguna & terbitkan token | Publik |
-| `POST` | `/api/logout` | Revoke token aktif & hapus sesi | Auth |
-| `GET` | `/api/classes` | Ambil daftar kelas yang diikuti | Auth |
-| `POST` | `/api/classes` | Buat ruang kelas baru | Auth |
-| `POST` | `/api/classes/join` | Gabung kelas via 6-karakter kode | Auth |
-| `GET` | `/api/classes/{id}` | Ambil detail informasi kelas | Anggota |
-| `POST` | `/api/classes/{id}/regenerate-code` | Acak ulang kode akses kelas | Owner |
-| `GET` | `/api/classes/{id}/members` | Daftar seluruh anggota kelas | Anggota |
-| `POST` | `/api/classes/{id}/members/{u}/promote` | Promosikan Member menjadi Admin | Owner |
-| `GET` | `/api/classes/{id}/materi` | Daftar materi pembelajaran | Anggota |
-| `POST` | `/api/classes/{id}/materi` | Buat / ajukan materi baru | Owner / Admin |
-| `POST` | `/api/classes/{id}/materi-versi/{v}/verify` | Approve / Reject draf materi | Owner |
-| `POST` | `/api/classes/{id}/soal/parse-teks` | Parsing teks soal format AI otomatis | Owner / Admin |
-| `GET` | `/api/classes/{id}/kuis` | Katalog kuis yang tersedia | Anggota |
-| `POST` | `/api/classes/{id}/kuis/{id}/submit` | Submit jawaban & kalkulasi skor/XP | Anggota |
-| `GET` | `/api/classes/{id}/leaderboard` | Peringkat anggota berdasarkan XP | Anggota |
 
 ---
 
