@@ -4,6 +4,8 @@ import { useAppState } from '../context/AppStateContext';
 import { authService } from '../services/authService';
 import companionImg from '../assets/companion.png';
 
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api';
+
 export default function AuthContainer({ initialMode = 'login' }) {
   const navigate = useNavigate();
   const { loginUser, registerUser } = useAppState();
@@ -583,7 +585,7 @@ export default function AuthContainer({ initialMode = 'login' }) {
                   <span>atau</span>
                 </div>
 
-                <a className="btn-google" href="http://localhost:8000/api/auth/google/redirect">
+                <a className="btn-google" href={`${API_BASE_URL}/auth/google/redirect`}>
                   <i className="bx bxl-google" style={{ fontSize: '1.25rem', color: '#ea4335' }}></i>
                   <span>Daftar dengan Google</span>
                 </a>
@@ -683,7 +685,7 @@ export default function AuthContainer({ initialMode = 'login' }) {
                   <span>atau</span>
                 </div>
 
-                <a className="btn-google" href="http://localhost:8000/api/auth/google/redirect">
+                <a className="btn-google" href={`${API_BASE_URL}/auth/google/redirect`}>
                   <i className="bx bxl-google" style={{ fontSize: '1.25rem', color: '#ea4335' }}></i>
                   <span>Masuk dengan Google</span>
                 </a>

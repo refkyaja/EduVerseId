@@ -1,4 +1,4 @@
-const API_BASE_URL = 'http://127.0.0.1:8000/api';
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000/api';
 
 const getAuthHeaders = () => {
   const token = localStorage.getItem('eduverse_token');
@@ -39,7 +39,7 @@ export const authService = {
       return result;
     } catch (err) {
       if (err.name === 'TypeError' || (err.message && err.message.includes('fetch'))) {
-        throw new Error('Gagal terhubung ke server backend Laravel. Pastikan server backend (http://127.0.0.1:8000) sedang berjalan.');
+        throw new Error(`Gagal terhubung ke server backend (${API_BASE_URL}). Pastikan server backend sedang berjalan.`);
       }
       throw err;
     }
@@ -88,7 +88,7 @@ export const authService = {
       return result;
     } catch (err) {
       if (err.name === 'TypeError' || (err.message && err.message.includes('fetch'))) {
-        throw new Error('Gagal terhubung ke server backend Laravel. Pastikan server backend (http://127.0.0.1:8000) sedang berjalan.');
+        throw new Error(`Gagal terhubung ke server backend (${API_BASE_URL}). Pastikan server backend sedang berjalan.`);
       }
       throw err;
     }
